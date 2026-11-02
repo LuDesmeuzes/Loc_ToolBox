@@ -31,6 +31,18 @@ Sorties (dans <run.runs_dir>/<run>/scrtdd/ ou scrtdd_reference/, ou --sortie) :
                     (origin = origine de référence dont viennent les pointés,
                     event = Event ID SeisComP) : LocQuality (ScrtddRun) s'en
                     sert pour relier les id scrtdd aux Event ID.
+  - formes_onde_NN.post : les formes d'onde à télécharger pour la corrélation
+                    croisée, au format POST des services FDSN (« réseau station
+                    location canaux début fin ») : une fenêtre par événement et
+                    par station pointée, de --marge-avant s avant le premier
+                    pointé à --marge-apres s après le dernier, les 3 composantes
+                    (HH?). 2000 fenêtres au plus par fichier.
+  - telecharger_formes_onde.sh : à lancer sur le serveur ; télécharge ces
+                    fenêtres (fdsnws_fetch de SeisComP, qui envoie chaque réseau
+                    à son centre de données par le routage EIDA) et les range
+                    avec scart dans une archive SDS dédiée (~/sds_<run>), sans
+                    toucher à l'archive du serveur. Utile quand l'archive du
+                    serveur n'a pas toutes les stations (ex. réseaux étrangers).
 
 Les positions des stations viennent de l'inventaire SeisComP
 (fdsnws-station), valides sur la période du run.
@@ -39,6 +51,9 @@ Sur le serveur, copier le dossier scrtdd/ puis lancer (à vérifier avec
 scrtdd --help, selon la version) :
     scrtdd --reloc-catalog station.csv,event.csv,phase.csv --profile <profil> \\
         --console=1 -v
+Si les formes d'onde manquent dans l'archive du serveur (« waveforms …
+not available » dans le log), lancer d'abord telecharger_formes_onde.sh puis
+ajouter -I sdsarchive://$HOME/sds_<run> à la commande scrtdd.
 Les sorties de scrtdd (reloc-event.csv…) sont à rapatrier dans le même
 dossier, à côté de l'eventlist, pour les analyses dd_* de LocQuality.
 
@@ -70,6 +85,32 @@ STATION_COLUMNS = ["latitude", "longitude", "elevation", "networkCode", "station
 EVENT_COLUMNS = ["id", "isotime", "latitude", "longitude", "depth", "magnitude"]
 PHASE_COLUMNS = ["eventId", "isotime", "lowerUncertainty", "upperUncertainty", "type",
                  "networkCode", "stationCode", "locationCode", "channelCode"]
+
+# Fenêtres par fichier POST (requêtes de taille raisonnable pour les services FDSN)
+POST_CHUNK = 2000
+
+WAVEFORM_SCRIPT = """#!/bin/bash
+# Télécharge les formes d'onde du run {run} (fenêtres de formes_onde_*.post,
+# écrites par scrtdd_inputs.py) avec fdsnws_fetch de SeisComP (routage EIDA :
+# chaque réseau est demandé à son centre de données), puis les range avec
+# scart dans une archive SDS dédiée, sans toucher à l'archive du serveur.
+# Usage, dans le dossier des fichiers :
+#   bash telecharger_formes_onde.sh [archive SDS]   (défaut : ~/sds_{run})
+# Puis : scrtdd … -I sdsarchive://<archive SDS>
+SDS=${{1:-$HOME/sds_{run}}}
+mkdir -p "$SDS" mseed
+for post in formes_onde_*.post; do
+  out=mseed/${{post%.post}}.mseed
+  if [ -s "$out" ]; then echo "$out déjà là"; continue; fi
+  echo "== $post ($(wc -l < "$post") fenêtres)"
+  seiscomp exec fdsnws_fetch -p "$post" -o "$out" 2>&1 | tail -3
+done
+for f in mseed/*.mseed; do
+  echo "== import $f → $SDS"
+  seiscomp exec scart -I "file://$PWD/$f" "$SDS" 2>&1 | tail -2
+done
+du -sh "$SDS"
+"""
 
 
 def isotime(t):
@@ -159,6 +200,40 @@ def build_tables(events, xml_events, excluded):
     return ev_rows, ph_rows, el_rows, stations
 
 
+def waveform_windows(ph_rows, before_s=20.0, after_s=40.0):
+    """
+    Fenêtres de formes d'onde à télécharger, au format POST des services FDSN
+    (« NET STA LOC CHA début fin », LOC vide → --, CHA = les 3 composantes) :
+    une par événement et par station pointée, de before_s avant le premier
+    pointé à after_s après le dernier (bruit avant la P, coda après la S).
+    """
+    span = {}
+    for r in ph_rows:
+        t = datetime.fromisoformat(r["isotime"].replace("Z", "+00:00"))
+        key = (r["eventId"], r["networkCode"], r["stationCode"],
+               r["locationCode"] or "--", r["channelCode"][:2] + "?")
+        lo, hi = span.get(key, (t, t))
+        span[key] = (min(lo, t), max(hi, t))
+    fmt = "%Y-%m-%dT%H:%M:%S"
+    return [f"{net} {sta} {loc} {cha} "
+            f"{(lo - timedelta(seconds=before_s)).strftime(fmt)} "
+            f"{(hi + timedelta(seconds=after_s)).strftime(fmt)}"
+            for (_, net, sta, loc, cha), (lo, hi) in sorted(span.items())]
+
+
+def write_waveform_requests(out_dir, windows, run):
+    """formes_onde_NN.post (POST_CHUNK fenêtres au plus) et telecharger_formes_onde.sh."""
+    for old in out_dir.glob("formes_onde_*.post"):
+        old.unlink()
+    for k in range(0, len(windows), POST_CHUNK):
+        part = out_dir / f"formes_onde_{k // POST_CHUNK + 1:02d}.post"
+        part.write_text("\n".join(windows[k:k + POST_CHUNK]) + "\n")
+    script = out_dir / "telecharger_formes_onde.sh"
+    script.write_text(WAVEFORM_SCRIPT.format(run=run))
+    script.chmod(0o755)
+    return -(-len(windows) // POST_CHUNK)
+
+
 def write_csv(path, columns, rows):
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=columns)
@@ -178,6 +253,10 @@ def parse_args():
     parser.add_argument("--origines", choices=["nll", "reference"], default="nll",
                         help="Positions de départ : localisations NLL du run (défaut) ou "
                              "origines de référence de evenements.csv (LOCSAT)")
+    parser.add_argument("--marge-avant", type=float, default=20.0,
+                        help="Formes d'onde : secondes avant le premier pointé (défaut : 20)")
+    parser.add_argument("--marge-apres", type=float, default=40.0,
+                        help="Formes d'onde : secondes après le dernier pointé (défaut : 40)")
     parser.add_argument("--sortie", help="Dossier de sortie (défaut : <run>/scrtdd, "
                                          "ou <run>/scrtdd_reference avec --origines reference)")
     parser.add_argument(
@@ -267,6 +346,10 @@ def main():
     write_csv(out_dir / "event.csv", EVENT_COLUMNS, ev_rows)
     write_csv(out_dir / "phase.csv", PHASE_COLUMNS, ph_rows)
     write_csv(out_dir / f"eventlist_{args.run}.csv", ["origin", "event"], el_rows)
+    windows = waveform_windows(ph_rows, args.marge_avant, args.marge_apres)
+    n_files = write_waveform_requests(out_dir, windows, args.run)
+    log(f"formes d'onde : {len(windows)} fenêtres en {n_files} fichiers POST "
+        f"+ telecharger_formes_onde.sh", 1)
     log(f"→ {out_dir}", 1)
 
 
