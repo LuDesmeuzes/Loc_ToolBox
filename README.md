@@ -204,7 +204,16 @@ Dans `<run>/scrtdd/` :
 - `station.csv` : positions de l'inventaire SeisComP, valides sur la
   période ;
 - `eventlist_<run>.csv` : `origin,event` dans l'ordre des `id`, pour que
-  LocQuality relie les `id` scrtdd aux Event ID.
+  LocQuality relie les `id` scrtdd aux Event ID ;
+- `formes_onde_NN.post` : la liste des formes d'onde utiles à la corrélation
+  croisée, au format POST des services FDSN (`réseau station location
+  canaux début fin`) : une fenêtre par événement et par station pointée, de
+  20 s avant le premier pointé à 40 s après le dernier (`--marge-avant`,
+  `--marge-apres`), les 3 composantes ; 2000 fenêtres au plus par fichier ;
+- `telecharger_formes_onde.sh` : à lancer sur le serveur si son archive n'a
+  pas toutes les stations. Il télécharge ces fenêtres avec `fdsnws_fetch`
+  (routage EIDA : CH à l'ETH, FR à RESIF…) et les range avec `scart` dans
+  une archive SDS à part, `~/sds_<run>`, sans toucher à celle du serveur.
 
 Avec `--origines reference`, les positions de départ sont celles de
 l'origine de référence du run (`evenements.csv`, en général le LOCSAT
@@ -228,9 +237,11 @@ scrtdd --reloc-catalog station.csv,event.csv,phase.csv --profile <profil> --cons
   (plugin `tttnll`), copier aussi `model/` et `time/` du profil NLL : il faut
   des grilles P **et** S pour toutes les stations de `station.csv`, y compris
   celles où une seule phase est pointée (`nll_run.py --grilles` les calcule).
-- Ajouter `-I sdsarchive:///<archive SDS>` si les formes d'onde de la région
-  ne sont pas dans le recordstream par défaut du serveur (corrélation
-  croisée) ; le log l'indique (« waveforms … not available »).
+- Si les formes d'onde de la région ne sont pas dans le recordstream par
+  défaut du serveur (le log l'indique : « waveforms … not available »),
+  lancer `bash telecharger_formes_onde.sh` puis ajouter
+  `-I sdsarchive://$HOME/sds_<run>` à la commande scrtdd. Exemple : Jura,
+  où l'archive du serveur n'avait presque pas de stations suisses.
 - Les formes d'onde téléchargées restent en cache : une relance sur les mêmes
   événements est beaucoup plus rapide (Ambert : 7 min → 17 s de corrélation).
 

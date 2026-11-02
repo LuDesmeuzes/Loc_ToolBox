@@ -380,3 +380,28 @@ def test_scrtdd_reference_positions(tmp_path):
     assert [e["event_id"] for e in out] == ["ev1"]
     assert (out[0]["latitude"], out[0]["longitude"], out[0]["depth"]) == (45.5858, 3.6704, 13.6)
     assert out[0]["time"].replace(tzinfo=None) == datetime(2026, 10, 22, 5, 28, 1, 500000)
+
+
+def test_waveform_windows_and_requests(tmp_path):
+    from scrtdd_inputs import POST_CHUNK, waveform_windows, write_waveform_requests
+
+    def ph(ev, sta, loc, cha, t):
+        return {"eventId": ev, "networkCode": "CH", "stationCode": sta,
+                "locationCode": loc, "channelCode": cha, "isotime": t}
+
+    rows = [ph(1, "BRANT", "", "HHZ", "2018-01-02T05:21:59.900000Z"),   # P
+            ph(1, "BRANT", "", "HHN", "2018-01-02T05:22:05.200000Z"),   # S, autre composante
+            ph(1, "CHMF", "00", "HHZ", "2018-01-02T05:22:01.000000Z"),
+            ph(2, "BRANT", "", "HHZ", "2018-01-03T00:00:10.000000Z")]
+    windows = waveform_windows(rows, before_s=20, after_s=40)
+    # Une fenêtre par événement et par station, du premier pointé - 20 s au dernier + 40 s,
+    # location vide → --, les 3 composantes
+    assert windows == ["CH BRANT -- HH? 2018-01-02T05:21:39 2018-01-02T05:22:45",
+                       "CH CHMF 00 HH? 2018-01-02T05:21:41 2018-01-02T05:22:41",
+                       "CH BRANT -- HH? 2018-01-02T23:59:50 2018-01-03T00:00:50"]
+
+    n = write_waveform_requests(tmp_path, windows * POST_CHUNK, "run_x")
+    assert n == 3
+    assert len((tmp_path / "formes_onde_01.post").read_text().splitlines()) == POST_CHUNK
+    script = (tmp_path / "telecharger_formes_onde.sh").read_text()
+    assert "sds_run_x" in script and "fdsnws_fetch" in script
