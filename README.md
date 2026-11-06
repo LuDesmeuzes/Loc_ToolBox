@@ -177,9 +177,24 @@ l'Ubaye, du Mont-Blanc, d'Ambert et du Jura :
 | `LOCTOPO_SURFACE` (topographie) | relief SRTM sur l'emprise de la recherche | `--sans-topo` |
 | Types d'événements récupérés | `earthquake` (sans les tirs de carrière) | `--types` |
 
-Choisir `--prof-max` d'après les séismes les plus profonds du catalogue de
-la région, et augmenter `--cellule` (4 km) pour une grande région, afin de
-garder un nombre de cellules raisonnable.
+Deux réglages sont à choisir selon la région :
+
+- **`--prof-max`** : profondeur maximale de la recherche. La prendre un peu
+  au-delà des séismes les plus profonds du catalogue de la région (le Jura
+  en a jusqu'à 54 km : `--prof-max 50` aurait pu être 60).
+- **`--cellule`** : taille des cellules de départ de la recherche. NLL ne
+  teste pas toutes les positions : il découpe le volume de recherche en
+  cellules de `--cellule` km, calcule la probabilité au centre de chacune,
+  puis coupe en 8 la plus probable, et recommence jusqu'à épuiser son budget
+  de nœuds (5e nombre de `LOCSEARCH OCT`). Des cellules trop grandes
+  balayent grossièrement et peuvent rater la bonne zone ; trop petites, elles
+  consomment le budget au départ, et il en reste moins pour affiner (le
+  script fixe le budget à 5 fois le nombre de cellules de départ : des
+  cellules plus petites rendent donc chaque localisation plus lente).
+  Garder 3 km ; passer à 4 ou 5 km si la zone dépasse 100 km de côté. Jura
+  (180 × 90 × 55 km) : 34 200 cellules de départ à 3 km, 14 490 à 4 km,
+  soit un budget de 171 000 au lieu de 75 000 nœuds (calcul environ 2,3 fois
+  plus long à 3 km, estimé d'après le nombre de nœuds).
 
 Le script écrit :
 
