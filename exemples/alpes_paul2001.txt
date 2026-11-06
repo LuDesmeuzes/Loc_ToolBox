@@ -1,0 +1,12 @@
+# Modèle 1D des Alpes occidentales de Paul et al. (2001), réseau Sismalp.
+# Utilisé par le profil 05_ubaye_1D_paul2001.
+# Une ligne par couche : toit (km sous le niveau de la mer), Vp, Vs (km/s), densité.
+# Vitesses constantes dans chaque couche ; creer_profil.py prolonge la
+# première jusqu'à -5 km pour couvrir le relief.
+-3.0   5.00   2.90   2.70
+ 2.0   5.50   3.10   2.70
+ 7.0   6.00   3.50   2.70
+12.0   6.10   3.55   2.70
+15.0   6.50   3.75   2.70
+23.0   6.60   3.85   2.70
+33.0   7.80   4.50   2.70

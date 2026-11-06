@@ -187,6 +187,7 @@ Modèles acceptés :
   linéairement. Exemple : `exemples/jura.nd`.
 - **texte en couches** : « toit Vp Vs [densité] » par ligne, en km et km/s,
   vitesses constantes dans chaque couche, commentaires après `#`.
+  Exemples : `exemples/alpes_labo.txt`, `exemples/alpes_paul2001.txt`.
 
 Profondeurs en km sous le niveau de la mer. La première couche est
 prolongée jusqu'à −5 km pour couvrir le relief.
@@ -538,7 +539,12 @@ dans `nll_common.py`.
 - `docs/vel2grid_grid2time.in.example` : fichier Vel2Grid + Grid2Time
   commenté pour un modèle 1D, pour comprendre ce qu'écrit
   `creer_profil.py` ou le faire à la main.
-- `exemples/jura.nd` : modèle 1D du Jura, utilisé par le premier essai.
+- `exemples/` : modèles 1D prêts à passer en `--modele` :
+  - `jura.nd` : modèle du Jura, utilisé par le premier essai ;
+  - `alpes_labo.txt` : modèle à 4 couches du laboratoire, celui du profil
+    SeisComP `1D_ubaye` et des profils 1D du Mont-Blanc ;
+  - `alpes_paul2001.txt` : modèle à 7 couches de Paul et al. (2001), réseau
+    Sismalp (profil `05_ubaye_1D_paul2001`).
 
 ## Tests
 
@@ -570,7 +576,7 @@ NonLinLoc_ToolBox/
 ├── segment_from_zones.py      ← modèle 3D : découpage en tuiles
 ├── nll_pipeline.py            ← modèle 3D : fichiers NLL de chaque tuile, topographie
 ├── nll_common.py              ← code partagé (projection, configuration, lecture)
-├── exemples/                  ← modèle 1D du premier essai
+├── exemples/                  ← modèles 1D (Jura, Alpes)
 ├── tests/                     ← tests unitaires (pytest)
 └── docs/                      ← tutoriel NLL/SeisComP + exemple de fichier .in
 ```
