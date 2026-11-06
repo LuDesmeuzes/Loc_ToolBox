@@ -1,0 +1,9 @@
+# Modèle 1D à 4 couches des Alpes, donné par un chercheur du laboratoire
+# (ISTerre). Utilisé par le profil SeisComP 1D_ubaye, et par 05_ubaye_1D,
+# 1_montblanc_1D_topo, 05_montblanc_1D_topo et 05_ambert_1D_topo.
+# Une ligne par couche : toit (km sous le niveau de la mer), Vp, Vs (km/s), densité.
+# Vitesses constantes dans chaque couche.
+-5.0   5.30   3.11   2.39
+ 3.0   5.92   3.48   2.61
+27.0   6.60   3.88   2.75
+35.0   8.80   5.17   2.98
