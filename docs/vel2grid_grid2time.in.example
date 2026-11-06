@@ -29,16 +29,19 @@ VGOUT ./model/layer # Vous pouvez aussi remplacer ce chemin par le chemin comple
 VGTYPE P
 VGTYPE S
 
-# VGRID xNum yNum zNum xOrig yOrig zOrig dx dy dz gridType
+# VGGRID xNum yNum zNum xOrig yOrig zOrig dx dy dz gridType
 #   xNum = 2 : active le mode grille 2D radial (spécifique au 1D, cf docs/).
 #   yNum x dy doit couvrir la distance max station-événement attendue.
 #   zNum x dz doit couvrir la gamme de profondeurs attendue.
 #   Prévoir une petite marge plutôt qu'une grille trop juste.
-VGRID 2 "YNUM" "ZNUM" 0.0 0.0 "ZORIG" "DX" "DY" "DZ" SLOW_LEN
+VGGRID 2 "YNUM" "ZNUM" 0.0 0.0 "ZORIG" "DX" "DY" "DZ" SLOW_LEN
 
-# Modèle de vitesse 1D par couche :
-#   depth   : profondeur du haut de la couche (la couche la plus profonde
-#             s'étend jusqu'à l'infini)
+# Modèle de vitesse 1D par couche (creer_profil.py écrit ces lignes à partir
+# d'un fichier .nd ou d'un fichier « toit Vp Vs ») :
+#   depth   : profondeur du haut de la couche, en km sous le niveau de la mer
+#             (la couche la plus profonde s'étend jusqu'à l'infini). La
+#             première couche doit partir du toit de la grille (ZORIG, ex. -5 km
+#             pour couvrir le relief), sinon le haut de la grille n'a pas de vitesse.
 #   Vp_top / Vs_top : vitesses ondes P/S en haut de la couche, en km/s
 #   Vp_grad / Vs_grad / p_grad : gradients depuis le haut de la couche
 #                                 (0 = vitesse constante dans la couche)
@@ -66,7 +69,7 @@ LAYER  35.0   6.90   0   3.92   0   2.98   0
 GTFILES ./model/layer ./time/layer P
 #GTFILES ./model/layer ./time/layer S
 
-# GTMODE GRID2D : cohérent avec xNum=2 de VGRID ci-dessus (mode 1D radial).
+# GTMODE GRID2D : cohérent avec xNum=2 de VGGRID ci-dessus (mode 1D radial).
 # ANGLES_YES : nécessaire pour les mécanismes au foyer (sinon ANGLES_NO,
 # plus rapide).
 GTMODE GRID2D ANGLES_YES

@@ -99,6 +99,9 @@ phases:
   default_error_s: {P: 0.02, S: 0.02}
 
 # ── Paramètres de fetch_picks.py ────────────────────────────────────────────
+# Pour une région créée par creer_profil.py, ces valeurs sont reprises dans
+# config_<région>.yaml (serveur, zone et dossiers propres à la région) : ici,
+# seuls cache_dir et obs_dir servent alors, de base aux dossiers de la région.
 fetch:
   # Service web fdsnws-event du serveur SeisComP
   fdsnws_url: "http://ist-sc3-sig.u-ga.fr:8080/fdsnws/event/1/query"
@@ -129,5 +132,10 @@ run:
   # Dossier où chaque run crée son sous-dossier <nom>/
   runs_dir: "/path/to/Localisation/runs"
 
-  # Binaire NLLoc
+  # Binaire NLLoc (Vel2Grid et Grid2Time doivent être dans le même dossier)
   nlloc: "/path/to/Localisation/outils/bin/NLLoc"
+
+  # Dossier des configurations par région écrites par creer_profil.py
+  # (<regions_dir>/<région>/config_<région>.yaml). Absent → profils_travail/
+  # à côté de profils_dir.
+  regions_dir: "/path/to/Localisation/profils_travail"
