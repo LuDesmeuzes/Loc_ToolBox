@@ -400,8 +400,89 @@ def test_waveform_windows_and_requests(tmp_path):
                        "CH CHMF 00 HH? 2018-01-02T05:21:41 2018-01-02T05:22:41",
                        "CH BRANT -- HH? 2018-01-02T23:59:50 2018-01-03T00:00:50"]
 
-    n = write_waveform_requests(tmp_path, windows * POST_CHUNK, "run_x")
+    n = write_waveform_requests(tmp_path, windows * POST_CHUNK)
     assert n == 3
     assert len((tmp_path / "formes_onde_01.post").read_text().splitlines()) == POST_CHUNK
-    script = (tmp_path / "telecharger_formes_onde.sh").read_text()
-    assert "sds_run_x" in script and "fdsnws_fetch" in script
+    assert (tmp_path / "telecharger_formes_onde.py").exists()
+
+
+def test_telecharger_routing_and_scart_list():
+    from telecharger_formes_onde import parse_routing, scart_list
+
+    reponse = ("https://eida.ethz.ch/fdsnws/dataselect/1/query\n"
+               "CH BRANT -- HH? 2023-06-01T00:00:00 2023-06-01T00:01:00\n\n"
+               "https://seisdata.epos-france.fr/fdsnws/dataselect/1/query\n"
+               "FR RONF 00 HH? 2023-06-01T00:00:00 2023-06-01T00:01:00\n")
+    routes = parse_routing(reponse)
+    assert list(routes) == ["https://eida.ethz.ch/fdsnws/dataselect/1/query",
+                            "https://seisdata.epos-france.fr/fdsnws/dataselect/1/query"]
+    assert routes["https://eida.ethz.ch/fdsnws/dataselect/1/query"][0].startswith("CH BRANT")
+    # Liste scart : « début;fin;NET.STA.LOC.CHA », location -- → vide
+    assert scart_list(["5C AVEN 00 HH? 2023-06-01T00:00:00 2023-06-01T00:01:00",
+                       "CH BRANT -- HH? 2023-06-01T00:00:00 2023-06-01T00:01:00"]) == [
+        "2023-06-01 00:00:00;2023-06-01 00:01:00;5C.AVEN.00.HH?",
+        "2023-06-01 00:00:00;2023-06-01 00:01:00;CH.BRANT..HH?"]
+
+
+def test_telecharger_fetch_splits_refused_requests(monkeypatch):
+    import telecharger_formes_onde as t
+
+    calls = []
+
+    def fake_post(url, body):
+        # Faux centre : refuse plus de 2 fenêtres par requête (comme RESIF au-delà de 200)
+        lines = body.split()
+        n = len(lines) // 6
+        calls.append(n)
+        return (400, b"too many source identifiers") if n > 2 else (200, b"x" * n)
+
+    monkeypatch.setattr(t, "post", fake_post)
+    windows = [f"FR RONF 00 HH? 2023-06-01T00:0{i}:00 2023-06-01T00:0{i}:30" for i in range(5)]
+    data, errors = t.fetch("https://centre", windows)
+    assert data == b"x" * 5 and errors == []
+    assert max(calls) == 5 and calls.count(5) == 1
+
+
+def test_creer_profil_lit_les_modeles(tmp_path):
+    from creer_profil import read_model
+
+    nd = tmp_path / "m.nd"
+    nd.write_text("0.0 5.5 3.2 2.6\n2.0 5.5 3.2 2.6\n2.0 6.0 3.5 2.7\n10.0 6.4 3.7 2.8\n"
+                  "mantle\n10.0 8.0 4.6 3.3\n")
+    layers = read_model(nd)
+    # Couche constante prolongée jusqu'au toit des grilles, gradient entre 2 et 10 km
+    assert [l["top"] for l in layers] == [-5.0, 2.0, 10.0]
+    assert layers[1]["vp_grad"] == pytest.approx(0.05)
+    assert (layers[2]["vp"], layers[2]["vs"]) == (8.0, 4.6)
+
+    couches = tmp_path / "m.txt"
+    couches.write_text("# toit Vp Vs\n3 6.0 3.5\n0 5.3 3.1\n")
+    layers = read_model(couches)
+    assert [(l["top"], l["vp"]) for l in layers] == [(-5.0, 5.3), (3.0, 6.0)]
+
+    faux = tmp_path / "faux.txt"
+    faux.write_text("0 5300 3100\n")  # m/s au lieu de km/s
+    with pytest.raises(SystemExit):
+        read_model(faux)
+
+
+def test_creer_profil_geometrie_jura():
+    from creer_profil import geometry, profile_files, read_model
+
+    # Doit redonner le profil 1_jura_1D_topo fait à la main (30 oct. 2026)
+    g = geometry((46.95, 47.55, 5.45, 7.55), prof_max=50, pas=1, marge_km=10,
+                 cellule_km=4, distance_max_km=400)
+    assert (g["lat0"], g["lon0"]) == (47.25, 6.5)
+    assert g["locgrid"] == (181, 91, 56, -90, -45, -5.0)
+    assert g["oct"] == (45, 23, 14, 75000)
+    assert g["vggrid"] == (2, 401, 66, 1)
+
+    layers = [{"top": -5.0, "vp": 5.5, "vp_grad": 0.0, "vs": 3.2, "vs_grad": 0.0,
+               "rho": 2.6, "rho_grad": 0.0}]
+    files = profile_files("p", g, layers, "m.nd", 1, topo=True)
+    conf = files["NLL.p.conf"]
+    assert "LOCSEARCH OCT 45 23 14 0.001 75000 5000 0 1" in conf
+    assert "LOCTOPO_SURFACE ${NLLROOT}/p/topo.asc 0" in conf
+    assert "GTFILES ${NLLROOT}/p/model/layer ${NLLROOT}/p/time/layer P" in files["nll_p.in"]
+    assert "VGGRID 2 401 66 0.0 0.0 -5.0 1 1 1 SLOW_LEN" in files["vel2grid_S.in"]
+    assert "LOCTOPO_SURFACE" not in profile_files("p", g, layers, "m.nd", 1, topo=False)["NLL.p.conf"]
