@@ -37,12 +37,10 @@ Sorties (dans <run.runs_dir>/<run>/scrtdd/ ou scrtdd_reference/, ou --sortie) :
                     par station pointée, de --marge-avant s avant le premier
                     pointé à --marge-apres s après le dernier, les 3 composantes
                     (HH?). 2000 fenêtres au plus par fichier.
-  - telecharger_formes_onde.sh : à lancer sur le serveur ; télécharge ces
-                    fenêtres (fdsnws_fetch de SeisComP, qui envoie chaque réseau
-                    à son centre de données par le routage EIDA) et les range
-                    avec scart dans une archive SDS dédiée (~/sds_<run>), sans
-                    toucher à l'archive du serveur. Utile quand l'archive du
-                    serveur n'a pas toutes les stations (ex. réseaux étrangers).
+  - telecharger_formes_onde.py : copie du script du dépôt, à lancer sur le
+                    serveur pour rassembler ces fenêtres dans une archive SDS
+                    dédiée (centres de données publics + archive du serveur
+                    pour les réseaux non publics), voir sa docstring.
 
 Les positions des stations viennent de l'inventaire SeisComP
 (fdsnws-station), valides sur la période du run.
@@ -52,8 +50,8 @@ scrtdd --help, selon la version) :
     scrtdd --reloc-catalog station.csv,event.csv,phase.csv --profile <profil> \\
         --console=1 -v
 Si les formes d'onde manquent dans l'archive du serveur (« waveforms …
-not available » dans le log), lancer d'abord telecharger_formes_onde.sh puis
-ajouter -I sdsarchive://$HOME/sds_<run> à la commande scrtdd.
+not available » dans le log), lancer d'abord telecharger_formes_onde.py puis
+ajouter -I sdsarchive://<archive> à la commande scrtdd.
 Les sorties de scrtdd (reloc-event.csv…) sont à rapatrier dans le même
 dossier, à côté de l'eventlist, pour les analyses dd_* de LocQuality.
 
@@ -68,6 +66,7 @@ import argparse
 import csv
 import io
 import math
+import shutil
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -89,28 +88,8 @@ PHASE_COLUMNS = ["eventId", "isotime", "lowerUncertainty", "upperUncertainty", "
 # Fenêtres par fichier POST (requêtes de taille raisonnable pour les services FDSN)
 POST_CHUNK = 2000
 
-WAVEFORM_SCRIPT = """#!/bin/bash
-# Télécharge les formes d'onde du run {run} (fenêtres de formes_onde_*.post,
-# écrites par scrtdd_inputs.py) avec fdsnws_fetch de SeisComP (routage EIDA :
-# chaque réseau est demandé à son centre de données), puis les range avec
-# scart dans une archive SDS dédiée, sans toucher à l'archive du serveur.
-# Usage, dans le dossier des fichiers :
-#   bash telecharger_formes_onde.sh [archive SDS]   (défaut : ~/sds_{run})
-# Puis : scrtdd … -I sdsarchive://<archive SDS>
-SDS=${{1:-$HOME/sds_{run}}}
-mkdir -p "$SDS" mseed
-for post in formes_onde_*.post; do
-  out=mseed/${{post%.post}}.mseed
-  if [ -s "$out" ]; then echo "$out déjà là"; continue; fi
-  echo "== $post ($(wc -l < "$post") fenêtres)"
-  seiscomp exec fdsnws_fetch -p "$post" -o "$out" 2>&1 | tail -3
-done
-for f in mseed/*.mseed; do
-  echo "== import $f → $SDS"
-  seiscomp exec scart -I "file://$PWD/$f" "$SDS" 2>&1 | tail -2
-done
-du -sh "$SDS"
-"""
+# Script de téléchargement (dépôt), copié à côté des fichiers POST
+WAVEFORM_SCRIPT = Path(__file__).resolve().parent / "telecharger_formes_onde.py"
 
 
 def isotime(t):
@@ -221,16 +200,14 @@ def waveform_windows(ph_rows, before_s=20.0, after_s=40.0):
             for (_, net, sta, loc, cha), (lo, hi) in sorted(span.items())]
 
 
-def write_waveform_requests(out_dir, windows, run):
-    """formes_onde_NN.post (POST_CHUNK fenêtres au plus) et telecharger_formes_onde.sh."""
+def write_waveform_requests(out_dir, windows):
+    """formes_onde_NN.post (POST_CHUNK fenêtres au plus) et telecharger_formes_onde.py."""
     for old in out_dir.glob("formes_onde_*.post"):
         old.unlink()
     for k in range(0, len(windows), POST_CHUNK):
         part = out_dir / f"formes_onde_{k // POST_CHUNK + 1:02d}.post"
         part.write_text("\n".join(windows[k:k + POST_CHUNK]) + "\n")
-    script = out_dir / "telecharger_formes_onde.sh"
-    script.write_text(WAVEFORM_SCRIPT.format(run=run))
-    script.chmod(0o755)
+    shutil.copy(WAVEFORM_SCRIPT, out_dir / WAVEFORM_SCRIPT.name)
     return -(-len(windows) // POST_CHUNK)
 
 
@@ -347,9 +324,9 @@ def main():
     write_csv(out_dir / "phase.csv", PHASE_COLUMNS, ph_rows)
     write_csv(out_dir / f"eventlist_{args.run}.csv", ["origin", "event"], el_rows)
     windows = waveform_windows(ph_rows, args.marge_avant, args.marge_apres)
-    n_files = write_waveform_requests(out_dir, windows, args.run)
+    n_files = write_waveform_requests(out_dir, windows)
     log(f"formes d'onde : {len(windows)} fenêtres en {n_files} fichiers POST "
-        f"+ telecharger_formes_onde.sh", 1)
+        f"+ {WAVEFORM_SCRIPT.name}", 1)
     log(f"→ {out_dir}", 1)
 
 
