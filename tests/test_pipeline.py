@@ -486,3 +486,29 @@ def test_creer_profil_geometrie_jura():
     assert "GTFILES ${NLLROOT}/p/model/layer ${NLLROOT}/p/time/layer P" in files["nll_p.in"]
     assert "VGGRID 2 401 66 0.0 0.0 -5.0 1 1 1 SLOW_LEN" in files["vel2grid_S.in"]
     assert "LOCTOPO_SURFACE" not in profile_files("p", g, layers, "m.nd", 1, topo=False)["NLL.p.conf"]
+
+
+def test_creer_profil_3d_geometrie_montblanc():
+    from creer_profil import check_model_covers, geometry, profile_files, tile_box
+
+    # Zone du Mont-Blanc, centre imposé : redonne LOCGRID / OCT de 05_montblanc_3D_topo
+    zone = (45.72, 45.95, 6.70, 7.03)
+    g = geometry(zone, prof_max=30, pas=0.5, marge_km=37, cellule_km=3.34, center=(45.835, 6.865))
+    assert g["locgrid"] == (101, 101, 36, -50, -50, -5.0)
+    assert g["oct"] == (30, 30, 11, 50000)
+
+    # Tuile symétrique autour du centre, arrondie vers l'extérieur à 0,01°
+    lat_min, lat_max, lon_min, lon_max = tile_box(zone, 45.835, 6.865, 80)
+    assert lat_min < 45.72 - 0.7 and lat_max > 45.95 + 0.7
+    assert abs((lon_min + lon_max) / 2 - 6.865) < 0.01
+
+    # Modèle de la tuile Mont-Blanc (en-tête réel) : la grille de recherche y tient…
+    hdr = (384, 390, 131, -94.5, -98.5, -5.0, 0.5, 0.5, 0.5)
+    assert check_model_covers(hdr, g, 30) is None
+    # … mais pas une recherche jusqu'à 70 km (modèle jusqu'à 60 km)
+    assert "dépasse le modèle" in check_model_covers(hdr, g, 70)
+
+    files = profile_files("p3", g, None, "wet_new.asc", 0.5, topo=True, mode="3D")
+    assert set(files) == {"nll_p3.in", "NLL.p3.conf"}
+    assert "GTMODE GRID3D ANGLES_YES" in files["nll_p3.in"]
+    assert "LOCSEARCH OCT 30 30 11 0.001 50000 5000 0 1" in files["NLL.p3.conf"]

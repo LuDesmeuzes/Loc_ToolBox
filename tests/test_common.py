@@ -7,6 +7,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from nll_common import (
+    NLL_PROGRAMS,
+    TOOLBOX_DIR,
     AzimuthalEquidistant,
     load_config,
     read_bounds_from_readme,
@@ -80,3 +82,62 @@ def test_load_config_reads_yaml(tmp_path):
     config_path.write_text("paths:\n  tuiles_dir: /tmp/tuiles\n", encoding="utf-8")
     config = load_config(config_path)
     assert config["paths"]["tuiles_dir"] == "/tmp/tuiles"
+
+
+def fake_nll(folder):
+    folder.mkdir(parents=True)
+    for prog in NLL_PROGRAMS:
+        (folder / prog).write_text("")
+    return folder
+
+
+def test_load_config_paths_relative_to_racine(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("racine: travail\nrun:\n  runs_dir: /ailleurs/runs\n"
+                           "phases:\n  xml_dirs: [xml/a]\n", encoding="utf-8")
+    config = load_config(config_path)
+    root = tmp_path / "travail"
+    assert config["racine"] == str(root)
+    assert config["run"]["profils_dir"] == str(root / "profils")
+    assert config["run"]["runs_dir"] == "/ailleurs/runs"
+    assert config["run"]["regions_dir"] == str(root / "profils_travail")
+    assert config["fetch"]["cache_dir"] == str(root / "donnees/pointes/xml_seiscomp/par_jour")
+    assert config["phases"]["xml_dirs"] == [str(root / "xml/a")]
+    assert config["run"]["nlloc"] is None
+
+
+def test_load_config_regions_dir_next_to_profils(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("run:\n  profils_dir: /data/Localisation/profils\n", encoding="utf-8")
+    assert load_config(config_path)["run"]["regions_dir"] == "/data/Localisation/profils_travail"
+
+
+def test_load_config_finds_nll_in_racine_bin(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    fake_nll(tmp_path / "bin")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(f"racine: {tmp_path}\n", encoding="utf-8")
+    assert load_config(config_path)["run"]["nlloc"] == str(tmp_path / "bin" / "NLLoc")
+
+
+def test_load_config_nll_bin_wins_and_needs_all_programs(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    fake_nll(tmp_path / "bin")
+    choisi = fake_nll(tmp_path / "nll")
+    incomplet = tmp_path / "incomplet"
+    incomplet.mkdir()
+    (incomplet / "NLLoc").write_text("")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(f"racine: {tmp_path}\nnll_bin: nll\n", encoding="utf-8")
+    assert load_config(config_path)["run"]["nlloc"] == str(choisi / "NLLoc")
+    config_path.write_text(f"racine: {tmp_path}\nnll_bin: incomplet\n", encoding="utf-8")
+    assert load_config(config_path)["run"]["nlloc"] == str(tmp_path / "bin" / "NLLoc")
+
+
+def test_load_config_without_config_yaml_uses_example():
+    if (TOOLBOX_DIR / "config.yaml").exists():
+        pytest.skip("config.yaml présent sur cette machine")
+    config = load_config(TOOLBOX_DIR / "config.yaml")
+    assert config["run"]["profils_dir"] == str(TOOLBOX_DIR.parent / "NonLinLoc_travail" / "profils")

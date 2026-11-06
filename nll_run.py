@@ -36,7 +36,8 @@ Sorties (dans <run.runs_dir>/<nom>/) :
 Configuration (sections run, fetch et phases de config.yaml) :
   run.profils_dir : dossier des profils (un sous-dossier par profil)
   run.runs_dir    : dossier où créer les runs
-  run.nlloc       : chemin du binaire NLLoc (Grid2Time est cherché à côté)
+  NLLoc et Grid2Time : trouvés par nll_common.find_nll() (nll_bin,
+                    <racine>/bin, PATH… ; voir installer_nll.py)
   fetch.fdsnws_station_url : service fdsnws-station (positions des stations)
 
 Utilisation :
@@ -62,7 +63,7 @@ import pandas as pd
 import yaml
 
 from fetch_picks import fetch_period
-from nll_common import AzimuthalEquidistant, load_config, log
+from nll_common import AzimuthalEquidistant, load_config, log, require_nll
 
 # Mots-clés gérés par nll_run.py, jamais recopiés depuis le .conf du profil
 MANAGED_KEYWORDS = {"CONTROL", "LOCFILES", "LOCHYPOUT"}
@@ -379,6 +380,7 @@ def main():
     args = parse_args()
     config = load_config(args.config)
     cfg = config["run"]
+    nlloc = require_nll(config)
     profils_dir = Path(cfg["profils_dir"])
     profile_dir = profils_dir / args.profil
     conf_path = profile_dir / f"NLL.{args.profil}.conf"
@@ -432,7 +434,7 @@ def main():
         all_missing = set().union(*to_make.values())
         coords = station_coordinates(config["fetch"]["fdsnws_station_url"], all_missing,
                                      args.debut, args.fin)
-        grid2time = Path(cfg["nlloc"]).with_name("Grid2Time")
+        grid2time = nlloc.with_name("Grid2Time")
         start = datetime.now()
         skipped = make_time_grids(grid_control, to_make, coords, grid2time, run_dir)
         log(f"grilles calculées en {(datetime.now() - start).total_seconds():.0f} s", 1)
@@ -459,7 +461,7 @@ def main():
 
     log(f"NLLoc : {n_events} événements en {len(chunks)} morceaux parallèles")
     start = datetime.now()
-    run_nlloc(cfg["nlloc"], in_files, run_dir)
+    run_nlloc(nlloc, in_files, run_dir)
     elapsed = (datetime.now() - start).total_seconds()
     n_located, n_rejected = merge_hyp(loc_dirs, run_dir / f"{name}.hyp")
     log(f"{n_located} localisés, {n_rejected} rejetés en {elapsed:.0f} s", 1)
