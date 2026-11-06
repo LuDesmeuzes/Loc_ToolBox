@@ -129,15 +129,17 @@ python creer_profil.py --region exemple_jura --nom exemple_jura_1D \
 ```
 
 2. Localiser mars 2024 (≈ 1 min : 31 jours de pointés, 23 stations,
-   NLLoc) :
+   NLLoc). Le plus simple est de copier la commande que l'étape 1 affiche
+   sous « Étape suivante », avec le vrai chemin, en remplaçant les
+   `AAAA-MM-JJ` par les dates. Écrite à la main, `<racine>` est le dossier
+   de travail (par défaut `NonLinLoc_travail/`, à côté du dépôt) :
 
 ```bash
 python nll_run.py --config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml \
     --profil exemple_jura_1D --debut 2024-03-01 --fin 2024-03-31 --grilles
 ```
 
-L'étape 1 affiche le chemin exact de `config_exemple_jura.yaml` et la
-commande de l'étape 2. À la fin, le run doit annoncer
+À la fin, le run doit annoncer
 « 25 localisés, 0 rejetés ». Les résultats sont dans
 `<racine>/runs/exemple_jura_1D_20240301_20240331/` :
 
