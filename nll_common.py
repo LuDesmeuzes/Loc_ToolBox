@@ -2,7 +2,7 @@
 nll_common.py
 =============
 Fonctions et classes partagées entre segment_from_zones.py et nll_pipeline.py :
-  - lecture de la configuration YAML
+  - lecture de la configuration YAML (chemins relatifs à `racine`, NLL)
   - projection cartographique Azimuthal Equidistant
   - lecture des README.txt générés par segment_from_zones.py
   - lecture des .hyp écrits par NLLoc
@@ -27,26 +27,116 @@ R2D = 180.0 / np.pi
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
+TOOLBOX_DIR = Path(__file__).resolve().parent
+
+# Dossier de travail par défaut : à côté du dépôt, pour qu'un nouveau clone ou
+# une suppression du dépôt n'emporte pas les grilles et les runs.
+DEFAULT_ROOT = TOOLBOX_DIR.parent / "NonLinLoc_travail"
+
+# Chemins de la configuration, relatifs à `racine` quand ils ne sont pas
+# absolus, avec leur valeur par défaut quand ils sont absents.
+PATH_DEFAULTS = {
+    ("paths", "model_file"): "donnees/modele_vitesse/wet_new.asc",
+    ("paths", "tuiles_dir"): "profils",
+    ("phases", "xml_dirs"): [],
+    ("phases", "output_dir"): "donnees/pointes/nll_obs",
+    ("fetch", "cache_dir"): "donnees/pointes/xml_seiscomp/par_jour",
+    ("fetch", "obs_dir"): "donnees/pointes/nll_obs",
+    ("run", "profils_dir"): "profils",
+    ("run", "runs_dir"): "runs",
+}
+
+NLL_PROGRAMS = ("NLLoc", "Vel2Grid", "Grid2Time")
+
+
+def resolve_path(value, root):
+    """Chemin absolu : ~ développé, relatif à `root` s'il n'est pas absolu."""
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else Path(root) / path)
+
+
+def find_nll(config, root):
+    """
+    Dossier des programmes NLL (NLLoc, Vel2Grid, Grid2Time), cherché dans
+    l'ordre : nll_bin de la configuration, run.nlloc (ancienne clé, chemin de
+    NLLoc), <racine>/bin, <racine>/outils/bin, le PATH. None si introuvable.
+    """
+    import shutil
+
+    candidates = []
+    if config.get("nll_bin"):
+        candidates.append(Path(resolve_path(config["nll_bin"], root)))
+    nlloc = (config.get("run") or {}).get("nlloc")
+    if nlloc and "/path/to" not in str(nlloc):
+        candidates.append(Path(resolve_path(nlloc, root)).parent)
+    candidates += [Path(root) / "bin", Path(root) / "outils" / "bin"]
+    on_path = shutil.which("NLLoc")
+    if on_path:
+        candidates.append(Path(on_path).resolve().parent)
+    for folder in candidates:
+        if all((folder / prog).is_file() for prog in NLL_PROGRAMS):
+            return folder
+    return None
+
+
 def load_config(config_path):
     """
-    Charge un fichier de configuration YAML.
+    Charge un fichier de configuration YAML et complète ses chemins.
 
-    Si le fichier n'existe pas, lève une erreur explicite invitant
-    à copier config.example.yaml → config.yaml et à l'adapter.
+    Tous les chemins sont relatifs au dossier `racine` (défaut :
+    NonLinLoc_travail/ à côté du dépôt), sauf s'ils sont absolus ; ceux qui
+    manquent prennent leur valeur par défaut (PATH_DEFAULTS ; run.regions_dir :
+    profils_travail/ à côté de run.profils_dir). run.nlloc
+    reçoit le chemin de NLLoc trouvé par find_nll() (None si introuvable :
+    voir require_nll()).
+
+    Le config.yaml du dépôt est facultatif : absent, config.example.yaml
+    sert à sa place. Un autre fichier absent lève une erreur explicite.
     """
     config_path = Path(config_path)
     if not config_path.exists():
         example = config_path.parent / "config.example.yaml"
-        raise FileNotFoundError(
-            f"Fichier de configuration introuvable : {config_path}\n"
-            f"→ Copier {example.name} vers {config_path.name} puis adapter "
-            f"les chemins à votre machine."
-        )
+        if config_path.resolve() == TOOLBOX_DIR / "config.yaml" and example.exists():
+            config_path = example
+        else:
+            raise FileNotFoundError(
+                f"Fichier de configuration introuvable : {config_path}\n"
+                f"→ Copier {example.name} vers {config_path.name} puis adapter "
+                f"les chemins à votre machine."
+            )
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     if not config:
         raise ValueError(f"Fichier de configuration vide ou invalide : {config_path}")
+
+    root = Path(resolve_path(config.get("racine") or DEFAULT_ROOT, config_path.resolve().parent))
+    config["racine"] = str(root)
+    for (section, key), default in PATH_DEFAULTS.items():
+        values = config.setdefault(section, None) or {}
+        config[section] = values
+        value = values.get(key, default)
+        if isinstance(value, list):
+            values[key] = [resolve_path(v, root) for v in value]
+        elif value is not None and "/path/to" not in str(value):
+            values[key] = resolve_path(value, root)
+    # Configurations des régions : profils_travail/ à côté des profils par défaut
+    run = config["run"]
+    run["regions_dir"] = resolve_path(run.get("regions_dir") or Path(run["profils_dir"]).parent / "profils_travail",
+                                      root)
+    nll_dir = find_nll(config, root)
+    config["run"]["nlloc"] = str(nll_dir / "NLLoc") if nll_dir else None
     return config
+
+
+def require_nll(config):
+    """Chemin de NLLoc ; s'arrête avec la marche à suivre s'il est introuvable."""
+    nlloc = (config.get("run") or {}).get("nlloc")
+    if nlloc:
+        return Path(nlloc)
+    raise SystemExit(
+        "NonLinLoc introuvable (NLLoc, Vel2Grid et Grid2Time, dans un même dossier).\n"
+        f"→ python installer_nll.py (le compile dans {Path(config['racine']) / 'bin'}),\n"
+        "  ou nll_bin: <dossier des programmes> dans config.yaml.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

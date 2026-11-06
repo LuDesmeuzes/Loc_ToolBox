@@ -5,8 +5,7 @@ ordinateur, avec les pointés d'un serveur SeisComP, sans passer par le
 serveur. Trois usages :
 
 1. **Créer un profil NLL pour une nouvelle région** à partir d'un modèle de
-   vitesse 1D (`creer_profil.py`) ou du modèle 3D (`segment_from_zones.py` +
-   `nll_pipeline.py`).
+   vitesse 1D ou du modèle 3D (`creer_profil.py`).
 2. **Localiser une période** avec un profil : pointés récupérés sur le
    serveur, grilles de temps calculées, NLLoc lancé en parallèle
    (`nll_run.py`).
@@ -40,66 +39,73 @@ lit directement les dossiers produits ici.
 
 ## Installation
 
-### 1. NonLinLoc
-
-NonLinLoc (Anthony Lomax) se compile une fois :
-
-```bash
-git clone https://github.com/alomax/NonLinLoc.git
-cd NonLinLoc/src
-mkdir bin
-cmake .
-make
-```
-
-Copier les programmes de `NonLinLoc/src/bin/` dans un dossier stable, par
-exemple `Localisation/outils/bin/`. Trois servent ici : `NLLoc`, `Grid2Time`
-et `Vel2Grid`. **Ils doivent rester dans le même dossier** : les scripts
-cherchent `Grid2Time` et `Vel2Grid` à côté de `NLLoc`. Lancé sans argument,
-`NLLoc` affiche sa version (v7.1.04 ou plus récente).
-
-### 2. NonLinLoc_ToolBox
+### 1. NonLinLoc_ToolBox
 
 ```bash
 git clone https://github.com/LuDesmeuzes/NonLinLoc.git NonLinLoc_ToolBox
 cd NonLinLoc_ToolBox
 python3 -m venv .venv
-source .venv/bin/activate        # à refaire dans chaque nouveau terminal
+source .venv/bin/activate
 pip install -r requirements.txt
-pytest tests/                    # vérification : tous les tests doivent passer
+pytest tests/
 ```
 
-### 3. Configuration de la machine
+`source .venv/bin/activate` est à refaire dans chaque nouveau terminal.
+`pytest` vérifie l'installation : tous les tests doivent passer.
 
-Tous les chemins sont dans un fichier YAML ; aucun n'est écrit dans le
-code. Une seule fois :
+Le dépôt peut être placé n'importe où. Le travail (profils, runs, pointés)
+va dans un **dossier de travail** à part, `racine`. Par défaut, c'est
+`NonLinLoc_travail/` **à côté** du dépôt, créé au besoin. Il survit donc à
+un nouveau clone du dépôt.
+
+### 2. NonLinLoc
+
+NonLinLoc (Anthony Lomax) se compile une fois, avec le script fourni :
+
+```bash
+python installer_nll.py
+```
+
+Il télécharge NonLinLoc, le compile (quelques minutes) et copie ses
+programmes dans `<racine>/bin/`, où les scripts les trouvent sans rien
+configurer. S'il manque un outil de compilation, il donne la commande pour
+l'installer : `xcode-select --install` et `brew install cmake` sur Mac,
+`sudo apt install build-essential cmake` sous Linux.
+
+NonLinLoc déjà compilé ailleurs ? Les scripts cherchent `NLLoc`,
+`Vel2Grid` et `Grid2Time`, qui doivent être **dans un même dossier**, dans
+l'ordre suivant : `nll_bin` de `config.yaml`, `<racine>/bin/`,
+`<racine>/outils/bin/`, puis le PATH.
+
+### 3. Configuration (facultative)
+
+Sans `config.yaml`, les scripts prennent `config.example.yaml`, et tout
+fonctionne avec le dossier de travail par défaut. Pour le changer, ou pour
+un autre réglage :
 
 ```bash
 cp config.example.yaml config.yaml
 ```
 
-puis remplacer les `/path/to/…` de `config.yaml` par vos dossiers. Pour
-localiser en local, seules comptent les sections suivantes :
+puis modifier dans `config.yaml` :
 
 | Clé | Contenu |
 | --- | --- |
-| `run.nlloc` | Chemin du programme `NLLoc` (Vel2Grid et Grid2Time à côté) |
-| `run.profils_dir` | Dossier des profils NLL (un sous-dossier par profil) |
-| `run.runs_dir` | Dossier des runs (un sous-dossier par run) |
-| `run.regions_dir` | Dossier des configurations par région (facultatif) |
-| `fetch.cache_dir`, `fetch.obs_dir` | Dossiers des pointés ; ceux de chaque région sont créés à côté |
-| `phases.default_error_s` | Incertitude des pointés qui n'en ont pas (0,02 s, comme SeisComP) |
+| `racine` | Dossier de travail (défaut : `NonLinLoc_travail/` à côté du dépôt) |
+| `nll_bin` | Dossier des programmes NonLinLoc, s'ils ne sont ni dans `<racine>/bin/` ni dans le PATH |
+| `paths.model_file` | Modèle 3D global (pour `--modele-3d` seulement) |
 
-Les sections `paths`, `segment` et `pipeline` ne servent qu'au modèle 3D.
-`config.yaml` est propre à chaque machine et n'est pas versionné ;
-`config.example.yaml` documente chaque clé.
+Les autres chemins (`run.profils_dir`, `run.runs_dir`, `fetch.cache_dir`…)
+sont relatifs à `racine` et ont des valeurs par défaut : il n'y a pas à y
+toucher. Un chemin absolu (`/…` ou `~/…`) est pris tel quel.
+`config.example.yaml` documente chaque clé. `config.yaml` est propre à
+chaque machine et n'est pas versionné.
 
-Organisation conseillée (celle des exemples) :
+Contenu du dossier de travail :
 
 ```
-Localisation/
-├── outils/bin/            NLLoc, Grid2Time, Vel2Grid
-├── outils/NonLinLoc_ToolBox/
+<racine>/
+├── bin/                   NLLoc, Grid2Time, Vel2Grid (installer_nll.py)
 ├── donnees/pointes/       pointés téléchargés (cache)
 ├── profils/               un dossier par profil NLL
 ├── profils_travail/       une configuration par région
@@ -112,22 +118,28 @@ L'exemple crée un profil 1D pour le Jura, puis localise les 25 séismes de
 mars 2024. Il faut l'accès au serveur fdsnws du Jura. Depuis le dossier
 `NonLinLoc_ToolBox`, environnement activé :
 
+1. Créer le profil et la configuration de la région (≈ 15 s, topographie
+   comprise) :
+
 ```bash
-# 1. Créer le profil et la configuration de la région (≈ 15 s, topographie comprise)
 python creer_profil.py --region exemple_jura --nom exemple_jura_1D \
     --modele exemples/jura.nd --lat 46.95 47.55 --lon 5.45 7.55 \
     --prof-max 50 --cellule 4 \
     --fdsnws http://ist-scjura-sig.u-ga.fr:8080/fdsnws
+```
 
-# 2. Localiser mars 2024 (≈ 1 min : 31 jours de pointés, 23 stations, NLLoc)
-python nll_run.py --config <regions_dir>/exemple_jura/config_exemple_jura.yaml \
+2. Localiser mars 2024 (≈ 1 min : 31 jours de pointés, 23 stations,
+   NLLoc) :
+
+```bash
+python nll_run.py --config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml \
     --profil exemple_jura_1D --debut 2024-03-01 --fin 2024-03-31 --grilles
 ```
 
 L'étape 1 affiche le chemin exact de `config_exemple_jura.yaml` et la
 commande de l'étape 2. À la fin, le run doit annoncer
 « 25 localisés, 0 rejetés ». Les résultats sont dans
-`<runs_dir>/exemple_jura_1D_20240301_20240331/` :
+`<racine>/runs/exemple_jura_1D_20240301_20240331/` :
 
 - `exemple_jura_1D_20240301_20240331.hyp` : les localisations au format
   NLLoc ;
@@ -152,6 +164,18 @@ la copie.
 python creer_profil.py --region <région> --nom <profil> --modele <fichier> \
     --lat <min> <max> --lon <min> <max> --fdsnws <adresse …/fdsnws>
 ```
+
+Les options obligatoires :
+
+| Option | Ce que c'est | Exemple |
+| --- | --- | --- |
+| `--region` | Nom court de la région. Il nomme la configuration de la région (`<regions_dir>/<région>/config_<région>.yaml`) et le cache des pointés (`par_jour_<région>`). Plusieurs profils peuvent partager une région : un 1D puis un 3D, ou deux modèles à comparer. La configuration existante est alors gardée, à condition que le serveur, la zone et les types d'événements soient les mêmes. | `jura` |
+| `--nom` | Nom du profil. Il nomme le dossier `<profils_dir>/<profil>/`, c'est lui qu'on donne à `nll_run.py --profil`, et il apparaît dans le nom des runs (`<profil>_<début>_<fin>`). Quand le profil est la copie d'un profil NLL de SeisComP, reprendre le même nom. Sinon, l'usage est `<n°>_<région>_<1D ou 3D>[_topo]`. | `1_jura_1D_topo` |
+| `--modele` | Modèle de vitesse 1D (formats ci-dessous). Pour un modèle 3D, voir `--modele-3d` plus bas. | `exemples/jura.nd` |
+| `--lat`, `--lon` | Zone des séismes à localiser, en degrés : latitudes min et max, longitudes min et max (est positif). Les pointés sont récupérés dans cette zone, et la grille de recherche la couvre, plus `--marge`. Les stations peuvent être en dehors. | `--lat 46.95 47.55 --lon 5.45 7.55` |
+| `--fdsnws` | Adresse fdsnws du serveur SeisComP de la région, jusqu'à `/fdsnws` : le script y ajoute `/event/1/query` et `/station/1/query`. | `http://ist-scjura-sig.u-ga.fr:8080/fdsnws` |
+
+Les noms de région et de profil sont limités aux lettres sans accent, aux chiffres, à `_` et à `-`, parce qu'ils servent de noms de dossiers et de fichiers. Toutes les options, avec leur valeur par défaut, s'affichent avec `python creer_profil.py --help`.
 
 Modèles acceptés :
 
@@ -208,29 +232,53 @@ Le script écrit :
   région (serveur fdsnws, zone, dossiers des pointés), à passer en
   `--config` à `fetch_picks.py`, `nll_run.py` et `scrtdd_inputs.py`.
 
-Il refuse d'écraser un profil ou une région existants (`--force` pour le
+Il refuse d'écraser un profil existant, ou une région existante d'un autre serveur ou d'une autre zone (`--force` pour le
 faire). Vérification : recréé avec ce script, le profil `1_jura_1D_topo`
 fait à la main donne exactement les mêmes localisations.
 
-### Avec le modèle 3D
+### Avec le modèle 3D : `creer_profil.py --modele-3d`
 
-Voir [Modèle 3D : découper une tuile](#modèle-3d--découper-une-tuile) pour
-produire `model/` et `topo.asc`, puis écrire à la main, sur le modèle d'un
-profil existant (ex. `profils/05_ubaye_3D_topo/`) :
+Le même script crée un profil 3D à partir du modèle de Jean Virieux et
+Nouibat Ahmed (voir [Modèle 3D](#modèle-3d--découper-une-tuile) pour se le
+procurer). `--modele-3d` sans valeur prend `paths.model_file` de
+`config.yaml` :
 
-1. `nll_<profil>.in` : `TRANS`, `GTFILES <modèle> <grilles> P`, `GTMODE`,
-   `GT_PLFD` (pas de `GTSRCE` : `--grilles` les prend dans l'inventaire).
-   `${NLLROOT}` = `run.profils_dir`. Deux profils peuvent partager les mêmes
-   grilles : `GTFILES` pointe alors vers le même dossier.
-2. `NLL.<profil>.conf` : `TRANS` (le même que pour les grilles), `LOCGRID`,
-   `LOCSEARCH`, `LOCMETH`… et `LOCTOPO_SURFACE ${NLLROOT}/<profil>/topo.asc 0`.
-   La grille de recherche n'a pas besoin du pas des grilles de temps :
-   l'octree subdivise lui-même. Choisir des cellules initiales d'environ
-   3 km de côté (ex. `LOCGRID 101 101 36 -50 -50 -5 1 1 1` et
-   `OCT 30 30 11` : 100/30 et 35/11 km).
-3. Une configuration de région : copier celle d'une autre région
-   (`profils_travail/<région>/config_<région>.yaml`) et changer le serveur,
-   la zone et les dossiers des pointés.
+```bash
+python creer_profil.py --region montblanc --nom 1_montblanc_3D_topo --modele-3d \
+    --lat 45.72 45.95 --lon 6.70 7.03 --pas 1 \
+    --fdsnws http://ist-sc3-sig.u-ga.fr:8080/fdsnws
+```
+
+Le script découpe une **tuile** du modèle autour de la zone, la convertit au
+format NLL avec `segment_from_zones.py` et `nll_pipeline.py` (réglages des
+sections `segment` et `pipeline` de `config.yaml`), génère la topographie
+sur la tuile et écrit le profil (grilles de temps en `GRID3D`). Le centre de
+la projection est celui de la tuile. Trois points diffèrent du 1D :
+
+- **La tuile doit couvrir les stations**, pas seulement les séismes : une
+  station hors du modèle n'a pas de grille de temps, et ses phases sont
+  perdues. Par défaut, la tuile déborde de 80 km autour de la zone
+  (`--marge-tuile`) ; `--tuile-lat` / `--tuile-lon` l'imposent. Au
+  Mont-Blanc, avec une tuile de ±99 km, 71 stations restaient hors du
+  modèle (1 010 phases sur 155 219).
+- **La place disque** : une grille 3D complète par station et par phase. Le
+  script affiche l'estimation : sur une tuile de 200 km, ≈ 20 Mo par
+  station et par phase au pas de 1 km, ≈ 157 Mo au pas de 0,5 km
+  (Mont-Blanc : `time/` = 5 Go au pas de 1 km, 40 Go au pas de 0,5 km).
+  Commencer au pas de 1 km.
+- **Le modèle ne couvre qu'une région** : le script s'arrête si la tuile en
+  sort, ou si la grille de recherche dépasse le modèle obtenu.
+
+Vérification : recréé avec ce script (`--tuile-lat 44.94 46.73 --tuile-lon
+5.59 8.14 --pas 0.5 --marge 37 --cellule 3.34`), le profil
+`05_montblanc_3D_topo` fait à la main donne le même modèle NLL.
+
+Pour un profil écrit à la main (autre modèle 3D, réglages particuliers),
+prendre exemple sur un profil existant : `nll_<profil>.in` (`TRANS`,
+`GTFILES <modèle> <grilles> P`, `GTMODE GRID3D`, `GT_PLFD` ; `${NLLROOT}` =
+`run.profils_dir` ; deux profils peuvent partager les mêmes grilles en
+pointant `GTFILES` vers le même dossier) et `NLL.<profil>.conf` (même
+`TRANS`, `LOCGRID`, `LOCSEARCH`, `LOCMETH`…, `LOCTOPO_SURFACE`).
 
 ## Lancer un run : `nll_run.py`
 
@@ -257,7 +305,8 @@ python nll_run.py --config <config> --profil <profil> --debut … --fin … \
    sont lues dans `<profil>/nll_<profil>.in`. Les positions des stations
    viennent de l'inventaire du serveur (`fetch.fdsnws_station_url`), valides
    sur la période. Compter environ 2 s par station et par phase pour une
-   grille 3D au pas de 0,5 km (87 Mo par grille), moins d'une seconde en 1D.
+   grille 3D au pas de 0,5 km (157 Mo par grille, angles compris), moins
+   d'une seconde en 1D.
 4. `NLLoc` tourne en parallèle sur `--jobs` morceaux de la période (par
    défaut, nombre de cœurs − 1) : environ 2 minutes pour 3000 événements.
 5. Le run est écrit dans `<runs_dir>/<nom>/` (par défaut
@@ -434,8 +483,8 @@ mickael.langlais@univ-grenoble-alpes.fr ; renseigner son chemin dans
 ```
 
 ```bash
-python segment_from_zones.py     # 1. découpage du modèle global en tuiles
-python nll_pipeline.py           # 2. fichiers NLL de chaque tuile
+python segment_from_zones.py
+python nll_pipeline.py
 ```
 
 1. **`segment_from_zones.py`** découpe le modèle global en tuiles
@@ -470,8 +519,9 @@ dans `nll_common.py`.
 
 | Message ou symptôme | Cause probable |
 | --- | --- |
-| `Fichier de configuration introuvable : …config.yaml` | `config.yaml` pas encore créé (voir Installation, étape 3) ou mauvais `--config` |
-| `Vel2Grid a échoué` / `Grid2Time a échoué` | Programmes absents du dossier de `run.nlloc` : les copier à côté de `NLLoc` ; le journal `.log` indiqué donne le détail |
+| `Fichier de configuration introuvable : …` | Le fichier passé en `--config` n'existe pas (souvent une faute dans le chemin d'un `config_<région>.yaml`) |
+| `NonLinLoc introuvable` | Lancer `python installer_nll.py`, ou indiquer le dossier des programmes dans `nll_bin` de `config.yaml` |
+| `Vel2Grid a échoué` / `Grid2Time a échoué` | Le journal `.log` indiqué donne le détail (souvent une ligne mal écrite du modèle de vitesse) |
 | Téléchargement des pointés bloqué ou en erreur | Serveur fdsnws inaccessible : réseau de l'université ou VPN ; tester l'adresse dans un navigateur |
 | `topo.asc non généré` | Pas d'internet ou `srtm.py` absent ; relancer avec `--force`, ou `--sans-topo` |
 | `… existe déjà (--force pour l'écraser)` | Profil ou région déjà créés : choisir un autre nom, ou `--force` |
@@ -506,9 +556,10 @@ et la préparation de scrtdd (fenêtres de formes d'onde, routage).
 NonLinLoc_ToolBox/
 ├── README.md                  ← ce fichier
 ├── requirements.txt           ← dépendances Python
-├── config.example.yaml        ← modèle de configuration (versionné)
-├── config.yaml                ← configuration de la machine (non versionné)
-├── creer_profil.py            ← nouveau profil 1D + configuration de la région
+├── config.example.yaml        ← configuration par défaut, chaque clé documentée (versionné)
+├── config.yaml                ← configuration de la machine, facultative (non versionné)
+├── installer_nll.py           ← télécharge et compile NonLinLoc dans <racine>/bin
+├── creer_profil.py            ← nouveau profil 1D ou 3D + configuration de la région
 ├── nll_run.py                 ← run NLL local : profil × période
 ├── fetch_picks.py             ← pointés d'une période depuis le serveur (fdsnws)
 ├── seiscomp_xml_to_obs.py     ← pointés SeisComP (XML déjà téléchargés) → NLLOC_OBS

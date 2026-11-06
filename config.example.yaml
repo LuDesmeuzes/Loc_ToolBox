@@ -1,20 +1,31 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # Configuration du pipeline NLL
 #
-# Pour l'utiliser :
+# Rien à faire pour commencer : sans config.yaml, les scripts prennent ce
+# fichier. Pour changer un réglage (le dossier de travail surtout) :
 #   cp config.example.yaml config.yaml
-#   puis adapter les chemins ci-dessous à votre machine.
+#   puis modifier config.yaml, qui n'est PAS versionné (voir .gitignore).
 #
-# config.yaml n'est PAS versionné (voir .gitignore) car il contient des
-# chemins propres à chaque poste de travail.
+# Les chemins relatifs partent de `racine` ; un chemin absolu (/… ou ~/…)
+# est pris tel quel. NonLinLoc (NLLoc, Vel2Grid, Grid2Time) est cherché,
+# dans l'ordre, dans nll_bin, <racine>/bin, <racine>/outils/bin et le PATH :
+# `python installer_nll.py` le compile dans <racine>/bin.
 # ═══════════════════════════════════════════════════════════════════════════
+
+# Dossier de travail : profils, runs, pointés, modèles. Absent → le dossier
+# NonLinLoc_travail/ à côté de ce dépôt (créé au besoin). Exemple :
+# racine: ~/Documents/Boulot/Localisation
+
+# Dossier des programmes NonLinLoc, s'ils ne sont ni dans <racine>/bin ni
+# dans le PATH :
+# nll_bin: ~/NonLinLoc/src/bin
 
 paths:
   # Fichier du modèle de vitesse global (LON LAT DEPTH VP VS)
-  model_file: "/path/to/Localisation/donnees/modele_vitesse/wet_new.asc"
+  model_file: "donnees/modele_vitesse/wet_new.asc"
 
   # Dossier racine contenant/recevant les tuiles
-  tuiles_dir: "/path/to/Localisation/profils"
+  tuiles_dir: "profils"
 
 # ── Paramètres de segment_from_zones.py ─────────────────────────────────────
 segment:
@@ -89,10 +100,10 @@ phases:
   # Dossiers d'exports XML SeisComP (un fichier par événement) à convertir.
   # Un fichier <nom_du_dossier>.obs est écrit pour chacun.
   xml_dirs:
-    - "/path/to/Localisation/donnees/pointes/xml_seiscomp/1_ubaye_v3"
+    - "donnees/pointes/xml_seiscomp/1_ubaye_v3"
 
   # Dossier de sortie des fichiers NLLOC_OBS
-  output_dir: "/path/to/Localisation/donnees/pointes/nll_obs"
+  output_dir: "donnees/pointes/nll_obs"
 
   # Incertitude (s) des pointés qui n'en ont pas dans le XML (pointés
   # automatiques). À aligner sur NonLinLoc.defaultPickError de SeisComP.
@@ -118,24 +129,21 @@ fetch:
   event_types: [earthquake]
 
   # Dossier des XML journaliers (cache : une journée n'est téléchargée qu'une fois)
-  cache_dir: "/path/to/Localisation/donnees/pointes/xml_seiscomp/par_jour"
+  cache_dir: "donnees/pointes/xml_seiscomp/par_jour"
 
   # Dossier des fichiers de pointés periode_<debut>_<fin>.obs
-  obs_dir: "/path/to/Localisation/donnees/pointes/nll_obs"
+  obs_dir: "donnees/pointes/nll_obs"
 
 # ── Paramètres de nll_run.py ────────────────────────────────────────────────
 run:
   # Dossier des profils : un sous-dossier par profil, avec NLL.<profil>.conf
   # (copie de la configuration SeisComP) et time/ (grilles de temps)
-  profils_dir: "/path/to/Localisation/profils"
+  profils_dir: "profils"
 
   # Dossier où chaque run crée son sous-dossier <nom>/
-  runs_dir: "/path/to/Localisation/runs"
-
-  # Binaire NLLoc (Vel2Grid et Grid2Time doivent être dans le même dossier)
-  nlloc: "/path/to/Localisation/outils/bin/NLLoc"
+  runs_dir: "runs"
 
   # Dossier des configurations par région écrites par creer_profil.py
   # (<regions_dir>/<région>/config_<région>.yaml). Absent → profils_travail/
   # à côté de profils_dir.
-  regions_dir: "/path/to/Localisation/profils_travail"
+  regions_dir: "profils_travail"
