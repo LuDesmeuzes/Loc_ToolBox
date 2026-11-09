@@ -512,3 +512,19 @@ def test_creer_profil_3d_geometrie_montblanc():
     assert set(files) == {"nll_p3.in", "NLL.p3.conf"}
     assert "GTMODE GRID3D ANGLES_YES" in files["nll_p3.in"]
     assert "LOCSEARCH OCT 30 30 11 0.001 50000 5000 0 1" in files["NLL.p3.conf"]
+
+
+def test_fetch_cache_refuse_une_autre_zone(tmp_path):
+    from fetch_picks import check_cache
+    cfg = {"fdsnws_url": "http://serveur/fdsnws/event/1/query",
+           "zone": {"lat_min": 46.95, "lat_max": 47.55, "lon_min": 5.45, "lon_max": 7.55}}
+    (tmp_path / "2019-01-01.xml").write_text("<seiscomp/>")
+    check_cache(cfg, tmp_path)
+    check_cache(cfg, tmp_path)
+    autre = {**cfg, "zone": {**cfg["zone"], "lat_min": 47.66}}
+    with pytest.raises(SystemExit, match="autre requête"):
+        check_cache(autre, tmp_path)
+    assert (tmp_path / "2019-01-01.xml").exists()
+    check_cache(autre, tmp_path, refresh=True)
+    assert not (tmp_path / "2019-01-01.xml").exists()
+    check_cache(autre, tmp_path)
