@@ -160,6 +160,23 @@ besoin pour une région : modèle de vitesse, grilles de temps, paramètres de
 la recherche. Il porte le nom d'un profil NLL de SeisComP quand il en est
 la copie.
 
+### Choisir la zone sur une carte : `choisir_zone.html`
+
+Le plus simple pour une nouvelle région est d'ouvrir `choisir_zone.html`
+dans un navigateur (double-clic, ou `open choisir_zone.html` sur Mac,
+`xdg-open choisir_zone.html` sous Linux ; internet nécessaire pour le fond
+de carte). On y dessine un rectangle autour des séismes à localiser. On
+choisit ensuite le modèle 1D ou 3D, le pas des grilles, la topographie, la
+région et le serveur. La page affiche alors la commande `creer_profil.py`
+complète, avec un nom de profil construit sur le modèle
+`<pas>_<région>_<1D|3D>[_topo]`, et un bouton pour la copier.
+
+La carte montre aussi la grille de recherche NLL qui sera créée (en
+tirets : la zone et la marge, arrondies à 5 km). En 3D, elle montre la
+tuile du modèle (en pointillés, à vérifier : elle doit couvrir les
+stations) et estime la place disque des grilles de temps. La page ne
+lance rien elle-même : c'est la commande copiée qui crée le profil.
+
 ### Avec un modèle 1D : `creer_profil.py`
 
 ```bash
@@ -567,6 +584,7 @@ NonLinLoc_ToolBox/
 ├── config.example.yaml        ← configuration par défaut, chaque clé documentée (versionné)
 ├── config.yaml                ← configuration de la machine, facultative (non versionné)
 ├── installer_nll.py           ← télécharge et compile NonLinLoc dans <racine>/bin
+├── choisir_zone.html          ← carte : dessiner la zone, obtenir la commande creer_profil.py
 ├── creer_profil.py            ← nouveau profil 1D ou 3D + configuration de la région
 ├── nll_run.py                 ← run NLL local : profil × période
 ├── fetch_picks.py             ← pointés d'une période depuis le serveur (fdsnws)
