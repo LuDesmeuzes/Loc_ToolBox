@@ -12,6 +12,11 @@ redemandée (sauf --refresh), et un téléchargement interrompu reprend où il
 s'est arrêté. Les pointés révisés sur le serveur depuis le téléchargement
 ne sont donc pris en compte qu'avec --refresh.
 
+Le cache retient le serveur et la zone de ses requêtes (requete.yaml) : si
+la configuration en change, le script s'arrête plutôt que de rendre des
+journées téléchargées pour une autre zone ; --refresh vide alors le cache
+et le remplit pour la nouvelle requête.
+
 Sorties (dans fetch.obs_dir) :
   - periode_<debut>_<fin>.obs              : pointés NLLOC_OBS, un bloc par
                                              événement (PUBLIC_ID = Event ID)
@@ -39,6 +44,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from pathlib import Path
+
+import yaml
 
 from nll_common import load_config, log
 from seiscomp_xml_to_obs import default_errors_from_config, read_xml_files, write_obs
@@ -82,6 +89,32 @@ def download_day(cfg, day, cache_dir, refresh=False, retries=3):
             time.sleep(5 * attempt)
 
 
+def check_cache(cfg, cache_dir, refresh=False):
+    """
+    Vérifie que le cache a été rempli pour le même serveur et la même zone
+    (requete.yaml) ; s'arrête sinon, ou vide le cache avec refresh. Écrit
+    requete.yaml s'il manque (cache existant : supposé cohérent).
+    """
+    request = {"fdsnws_url": cfg["fdsnws_url"],
+               "zone": {k: float(cfg["zone"][k]) for k in ("lat_min", "lat_max", "lon_min", "lon_max")}}
+    path = Path(cache_dir) / "requete.yaml"
+    if path.exists():
+        old = yaml.safe_load(path.read_text()) or {}
+        if old != request:
+            if not refresh:
+                raise SystemExit(
+                    f"Le cache {cache_dir} a été rempli pour une autre requête :\n"
+                    f"  cache         : {old.get('fdsnws_url')}, zone {old.get('zone')}\n"
+                    f"  configuration : {request['fdsnws_url']}, zone {request['zone']}\n"
+                    "→ relancer avec --refresh pour vider le cache et retélécharger, "
+                    "ou utiliser une autre région (creer_profil.py --region)")
+            removed = list(Path(cache_dir).glob("*.xml"))
+            for f in removed:
+                f.unlink()
+            log(f"cache vidé ({len(removed)} journées d'une autre zone)", 1)
+    path.write_text(yaml.safe_dump(request, sort_keys=False))
+
+
 def days_between(debut, fin):
     """Jours de debut à fin inclus."""
     return [debut + timedelta(days=i) for i in range((fin - debut).days + 1)]
@@ -95,6 +128,7 @@ def fetch_period(config, debut, fin, refresh=False):
     cfg = config["fetch"]
     cache_dir = Path(cfg["cache_dir"])
     cache_dir.mkdir(parents=True, exist_ok=True)
+    check_cache(cfg, cache_dir, refresh)
     obs_dir = Path(cfg["obs_dir"])
     obs_dir.mkdir(parents=True, exist_ok=True)
 
