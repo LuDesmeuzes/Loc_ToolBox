@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choisir la zone</title>
+<!--
+  choisir_zone.html
+  =================
+  Dessiner sur une carte la zone des séismes d'une nouvelle région, choisir
+  le modèle (1D ou 3D), le pas des grilles et la topographie, et obtenir la
+  commande creer_profil.py correspondante. Sur la carte : la grille de
+  recherche NLL (tirets : zone + --marge km, arrondie à 5 km) et, en 3D, la
+  tuile du modèle (pointillés : zone + --marge-tuile km), calculées comme
+  dans creer_profil.py.
+
+  Utilisation : ouvrir ce fichier dans un navigateur (double-clic, ou
+  `open choisir_zone.html` sur Mac, `xdg-open choisir_zone.html` sous Linux).
+  Internet nécessaire pour le fond de carte.
+-->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<style>
+  :root {
+    --bg: #f7f6f3; --panel: #ffffff; --ink: #1f2328; --muted: #5c6370;
+    --line: #d8d5cf; --accent: #2f6fb3; --accent-ink: #ffffff; --code: #f0efec; --warn: #a1470d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17191c; --panel: #202328; --ink: #e8e6e3; --muted: #a0a6ae;
+      --line: #3a3f46; --accent: #6aa5e6; --accent-ink: #0d1117; --code: #2a2e34; --warn: #f0a46c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17191c; --panel: #202328; --ink: #e8e6e3; --muted: #a0a6ae;
+    --line: #3a3f46; --accent: #6aa5e6; --accent-ink: #0d1117; --code: #2a2e34; --warn: #f0a46c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid; grid-template-columns: 1fr 390px; height: 100vh;
+  }
+  #carte { height: 100%; min-height: 320px; }
+  aside {
+    background: var(--panel); border-left: 1px solid var(--line);
+    padding: 16px; overflow-y: auto;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.aide { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 14px; padding: 10px 12px; }
+  legend { font-weight: 600; padding: 0 4px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 2px; }
+  label.choix { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; margin-right: 14px; }
+  label.choix input { width: auto; }
+  input, select {
+    width: 100%; padding: 6px 8px; font: inherit; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .resume { font-size: 14px; margin: 6px 0 0; }
+  .alerte { font-size: 13px; color: var(--warn); margin: 4px 0 0; }
+  .ligne-nom { display: flex; align-items: center; justify-content: space-between; }
+  .ligne-nom label.choix { font-size: 13px; color: var(--muted); margin: 8px 0 2px; }
+  pre {
+    background: var(--code); border-radius: 6px; padding: 10px; margin: 0;
+    white-space: pre-wrap; word-break: break-all; font-size: 13px;
+  }
+  button {
+    margin-top: 8px; padding: 7px 12px; font: inherit; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px;
+  }
+  .note { font-size: 13px; color: var(--muted); }
+  [hidden] { display: none !important; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height: auto; }
+    aside { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div id="carte"></div>
+<aside>
+  <h1>Zone d'une nouvelle région</h1>
+  <p class="aide">Dessiner un rectangle avec l'outil ▭ en haut à gauche de la carte, autour des
+    séismes à localiser (pas des stations). Le rectangle se déplace et se redimensionne avec l'outil ✎,
+    ou en modifiant les coordonnées ci-dessous.</p>
+
+  <fieldset>
+    <legend>Zone des séismes (degrés)</legend>
+    <div class="deux">
+      <div><label for="lat0">Latitude min</label><input id="lat0" type="number" step="0.01"></div>
+      <div><label for="lat1">Latitude max</label><input id="lat1" type="number" step="0.01"></div>
+      <div><label for="lon0">Longitude min</label><input id="lon0" type="number" step="0.01"></div>
+      <div><label for="lon1">Longitude max</label><input id="lon1" type="number" step="0.01"></div>
+    </div>
+    <p class="resume" id="resume">Pas encore de zone.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Modèle et grilles</legend>
+    <label class="choix"><input type="radio" name="dim" value="1D" checked> 1D</label>
+    <label class="choix"><input type="radio" name="dim" value="3D"> 3D</label>
+    <div id="bloc1d">
+      <label for="modele">--modele</label>
+      <select id="modele">
+        <option value="exemples/alpes_labo.txt">exemples/alpes_labo.txt (Alpes, labo, 4 couches)</option>
+        <option value="exemples/alpes_paul2001.txt">exemples/alpes_paul2001.txt (Alpes, Paul et al. 2001)</option>
+        <option value="exemples/jura.nd">exemples/jura.nd (Jura)</option>
+        <option value="autre">autre fichier…</option>
+      </select>
+      <input id="modele_autre" placeholder="chemin du fichier .nd ou .txt" hidden style="margin-top:6px">
+    </div>
+    <div id="bloc3d" hidden>
+      <label for="modele3d">--modele-3d (vide : paths.model_file de config.yaml)</label>
+      <input id="modele3d" placeholder="wet_new.asc de config.yaml">
+      <label for="margetuile">--marge-tuile (km), pour couvrir les stations</label>
+      <input id="margetuile" type="number" value="80" step="10">
+    </div>
+    <div class="deux">
+      <div>
+        <label for="pas">--pas des grilles (km)</label>
+        <select id="pas">
+          <option value="0.25">0,25</option>
+          <option value="0.5">0,5</option>
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+        </select>
+      </div>
+      <div>
+        <label>Topographie</label>
+        <label class="choix"><input id="topo" type="checkbox" checked> prise en compte</label>
+      </div>
+    </div>
+    <div class="deux">
+      <div><label for="profmax">--prof-max (km)</label><input id="profmax" type="number" value="30" step="5"></div>
+      <div><label for="marge">--marge (km)</label><input id="marge" type="number" value="10" step="5"></div>
+    </div>
+    <p class="alerte" id="alerte3d" hidden></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Profil</legend>
+    <label for="region">--region</label><input id="region" value="ma_region">
+    <div class="ligne-nom">
+      <label for="nom" style="margin:8px 0 2px">--nom</label>
+      <label class="choix"><input id="nomauto" type="checkbox" checked> automatique</label>
+    </div>
+    <input id="nom">
+    <p class="alerte" id="alertenom" hidden></p>
+    <label for="fdsnws">--fdsnws</label><input id="fdsnws" value="http://ist-sc3-sig.u-ga.fr:8080/fdsnws">
+  </fieldset>
+
+  <fieldset>
+    <legend>Commande</legend>
+    <pre id="commande">Dessiner d'abord une zone.</pre>
+    <button id="copier" type="button">Copier</button>
+    <p class="note">À lancer depuis le dossier NonLinLoc_ToolBox, environnement activé.
+      Tirets : grille de recherche (zone + marge, arrondie à 5 km). Pointillés : tuile du modèle 3D.</p>
+  </fieldset>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script>
+const KM_PER_DEG = 111.195;
+const Z_TOP_KM = -5;
+const BYTES_PER_NODE_3D = 8;
+const NOM_VALIDE = /^[A-Za-z0-9_-]+$/;
+const $ = id => document.getElementById(id);
+
+L.drawLocal.draw.toolbar.buttons.rectangle = "Dessiner la zone";
+L.drawLocal.draw.handlers.rectangle.tooltip.start = "Cliquer-glisser pour dessiner la zone";
+L.drawLocal.draw.handlers.simpleshape.tooltip.end = "Relâcher pour terminer";
+L.drawLocal.edit.toolbar.buttons.edit = "Modifier la zone";
+L.drawLocal.edit.toolbar.buttons.remove = "Effacer la zone";
+
+const carte = L.map("carte").setView([45.6, 6.6], 7);
+const plan = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(carte);
+const relief = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+  { maxZoom: 17, attribution: "© OpenStreetMap, SRTM, © OpenTopoMap" });
+L.control.layers({ "Plan": plan, "Relief": relief }).addTo(carte);
+L.control.scale({ imperial: false }).addTo(carte);
+
+const dessins = new L.FeatureGroup().addTo(carte);
+carte.addControl(new L.Control.Draw({
+  draw: { rectangle: { shapeOptions: { color: "#2f6fb3", weight: 2 } },
+          polygon: false, polyline: false, circle: false, marker: false, circlemarker: false },
+  edit: { featureGroup: dessins },
+}));
+let zone = null, grille = null, tuile = null;
+
+const arrondi = v => Math.round(v * 100) / 100;
+const dim = () => document.querySelector("input[name=dim]:checked").value;
+const pas = () => parseFloat($("pas").value);
+
+function bornes() {
+  const v = ["lat0", "lat1", "lon0", "lon1"].map(id => parseFloat($(id).value));
+  if (v.some(isNaN)) return null;
+  const [la0, la1, lo0, lo1] = v;
+  return { latMin: Math.min(la0, la1), latMax: Math.max(la0, la1),
+           lonMin: Math.min(lo0, lo1), lonMax: Math.max(lo0, lo1) };
+}
+
+// Demi-largeurs de la zone en km autour de son centre (creer_profil.zone_half_km) :
+// est-ouest mesurée au bord le plus large (le plus proche de l'équateur).
+function demiZone(b) {
+  const lat0 = (b.latMin + b.latMax) / 2;
+  const cos = d => Math.cos(d * Math.PI / 180);
+  const kmLon = KM_PER_DEG * cos(lat0);
+  const kmLonLarge = KM_PER_DEG * Math.max(cos(b.latMin), cos(b.latMax));
+  return { lat0, lon0: (b.lonMin + b.lonMax) / 2, kmLon,
+           zx: (b.lonMax - b.lonMin) / 2 * kmLonLarge, zy: (b.latMax - b.latMin) / 2 * KM_PER_DEG };
+}
+
+// Grille de recherche comme creer_profil.geometry() : demi-largeurs = demi-zone
+// + marge, arrondies au-dessus à 5 km.
+function grilleRecherche(b, marge) {
+  const z = demiZone(b);
+  const hx = Math.ceil((z.zx + marge) / 5) * 5, hy = Math.ceil((z.zy + marge) / 5) * 5;
+  return { hx, hy, sud: z.lat0 - hy / KM_PER_DEG, nord: z.lat0 + hy / KM_PER_DEG,
+           ouest: z.lon0 - hx / z.kmLon, est: z.lon0 + hx / z.kmLon };
+}
+
+// Tuile 3D comme creer_profil.tile_box() : zone + marge-tuile, arrondie à 0,01°.
+function tuile3D(b, margeTuile) {
+  const z = demiZone(b);
+  const dlat = (z.zy + margeTuile) / KM_PER_DEG, dlon = (z.zx + margeTuile) / z.kmLon;
+  return { sud: Math.floor((z.lat0 - dlat) * 100) / 100, nord: Math.ceil((z.lat0 + dlat) * 100) / 100,
+           ouest: Math.floor((z.lon0 - dlon) * 100) / 100, est: Math.ceil((z.lon0 + dlon) * 100) / 100,
+           lx: 2 * (z.zx + margeTuile), ly: 2 * (z.zy + margeTuile) };
+}
+
+// Préfixe du pas dans les noms de profils : 1 → « 1 », 0,5 → « 05 », 0,25 → « 025 ».
+const prefixePas = p => String(p).replace(".", "");
+
+function nomAuto() {
+  const region = $("region").value.trim() || "region";
+  return `${prefixePas(pas())}_${region}_${dim()}${$("topo").checked ? "_topo" : ""}`;
+}
+
+function optionModele() {
+  if (dim() === "3D") {
+    const f = $("modele3d").value.trim();
+    return f ? `--modele-3d ${f}` : "--modele-3d";
+  }
+  const m = $("modele").value;
+  return "--modele " + (m === "autre" ? ($("modele_autre").value.trim() || "<fichier>") : m);
+}
+
+function miseAJour(depuisCarte) {
+  const est3D = dim() === "3D";
+  $("bloc1d").hidden = est3D;
+  $("bloc3d").hidden = !est3D;
+  $("modele_autre").hidden = $("modele").value !== "autre";
+  if ($("nomauto").checked) $("nom").value = nomAuto();
+  const fautifs = ["region", "nom"].filter(id => !NOM_VALIDE.test($(id).value));
+  $("alertenom").hidden = !fautifs.length;
+  $("alertenom").textContent = fautifs.map(id => "--" + id).join(" et ")
+    + " : lettres sans accent, chiffres, _ et - seulement.";
+
+  const b = bornes();
+  if (grille) { carte.removeLayer(grille); grille = null; }
+  if (tuile) { carte.removeLayer(tuile); tuile = null; }
+  $("alerte3d").hidden = true;
+  if (!b) { $("commande").textContent = "Dessiner d'abord une zone."; return; }
+  if (!depuisCarte) {
+    dessins.clearLayers();
+    zone = L.rectangle([[b.latMin, b.lonMin], [b.latMax, b.lonMax]], { color: "#2f6fb3", weight: 2 });
+    dessins.addLayer(zone);
+  }
+  const marge = parseFloat($("marge").value) || 0;
+  const g = grilleRecherche(b, marge);
+  grille = L.rectangle([[g.sud, g.ouest], [g.nord, g.est]],
+    { color: "#2f6fb3", weight: 1.5, dashArray: "6 6", fill: false, interactive: false }).addTo(carte);
+  const z = demiZone(b);
+  let resume = `Zone ≈ ${(2 * z.zx).toFixed(0)} × ${(2 * z.zy).toFixed(0)} km ; `
+    + `grille de recherche ≈ ${2 * g.hx} × ${2 * g.hy} km.`;
+
+  const margeTuile = parseFloat($("margetuile").value) || 0;
+  if (est3D) {
+    const t = tuile3D(b, margeTuile);
+    tuile = L.rectangle([[t.sud, t.ouest], [t.nord, t.est]],
+      { color: "#a1470d", weight: 1.5, dashArray: "2 5", fill: false, interactive: false }).addTo(carte);
+    resume += ` Tuile 3D ≈ ${t.lx.toFixed(0)} × ${t.ly.toFixed(0)} km.`;
+    // Grille de temps 3D : la tuile, de -5 km à max(60, prof. max + 10) km.
+    const zmax = Math.max(60, (parseFloat($("profmax").value) || 30) + 10);
+    const noeuds = (t.lx / pas() + 1) * (t.ly / pas() + 1) * ((zmax - Z_TOP_KM) / pas() + 1);
+    const mo = noeuds * BYTES_PER_NODE_3D / 1e6;
+    $("alerte3d").hidden = false;
+    $("alerte3d").textContent = `Grilles de temps 3D ≈ ${mo.toFixed(0)} Mo par station et par phase `
+      + `(100 stations en P et S ≈ ${(mo * 200 / 1e3).toFixed(0)} Go).`;
+  }
+  $("resume").textContent = resume;
+
+  const opts = [];
+  if (pas() !== 1) opts.push(`--pas ${pas()}`);
+  if (parseFloat($("profmax").value) !== 30) opts.push(`--prof-max ${$("profmax").value}`);
+  if (marge !== 10) opts.push(`--marge ${marge}`);
+  if (est3D && margeTuile !== 80) opts.push(`--marge-tuile ${margeTuile}`);
+  if (!$("topo").checked) opts.push("--sans-topo");
+  $("commande").textContent = `python creer_profil.py --region ${$("region").value} --nom ${$("nom").value} `
+    + `${optionModele()} --lat ${b.latMin} ${b.latMax} --lon ${b.lonMin} ${b.lonMax} `
+    + (opts.length ? opts.join(" ") + " " : "") + `--fdsnws ${$("fdsnws").value}`;
+}
+
+function depuisRectangle(layer) {
+  const bb = layer.getBounds();
+  $("lat0").value = arrondi(bb.getSouth()); $("lat1").value = arrondi(bb.getNorth());
+  $("lon0").value = arrondi(bb.getWest()); $("lon1").value = arrondi(bb.getEast());
+  miseAJour(true);
+}
+
+carte.on(L.Draw.Event.CREATED, e => {
+  dessins.clearLayers(); zone = e.layer; dessins.addLayer(zone); depuisRectangle(zone);
+});
+carte.on(L.Draw.Event.EDITED, e => e.layers.eachLayer(depuisRectangle));
+carte.on(L.Draw.Event.DELETED, () => {
+  ["lat0", "lat1", "lon0", "lon1"].forEach(id => $(id).value = "");
+  $("resume").textContent = "Pas encore de zone.";
+  miseAJour(false);
+});
+["lat0", "lat1", "lon0", "lon1"].forEach(id => $(id).addEventListener("change", () => miseAJour(false)));
+["region", "modele", "modele_autre", "modele3d", "margetuile", "pas", "topo", "profmax", "marge", "fdsnws", "nomauto"]
+  .forEach(id => $(id).addEventListener("input", () => miseAJour(true)));
+document.querySelectorAll("input[name=dim]").forEach(r => r.addEventListener("change", () => miseAJour(true)));
+// Taper un nom à la main désactive le nom automatique ; recocher « automatique » le rétablit.
+$("nom").addEventListener("input", () => { $("nomauto").checked = false; miseAJour(true); });
+$("copier").addEventListener("click", () => {
+  navigator.clipboard.writeText($("commande").textContent).then(
+    () => { $("copier").textContent = "Copié"; setTimeout(() => $("copier").textContent = "Copier", 1500); },
+    () => { $("copier").textContent = "Copie impossible : sélectionner le texte"; });
+});
+miseAJour(true);
+</script>
+</body>
+</html>
