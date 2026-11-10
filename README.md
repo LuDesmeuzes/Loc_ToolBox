@@ -11,8 +11,8 @@ serveur. Trois usages :
    (`nll_run.py`).
 3. **Préparer une relocalisation en double différence** avec scrtdd sur le
    serveur (`scrtdd_inputs.py`, `telecharger_formes_onde.py`).
-4. **Installer un profil dans SeisComP** (scolv, plugin NonLinLoc), avec
-   les grilles calculées en local (`profil_vers_seiscomp.py`).
+4. **Installer un profil dans SeisComP** (scolv avec le plugin NonLinLoc,
+   et scrtdd), avec les grilles calculées en local (`profil_vers_seiscomp.py`).
 
 La qualité des localisations s'analyse ensuite avec le dépôt
 [LocQuality_ToolBox](https://github.com/LuDesmeuzes/LocQuality_ToolBox), qui
@@ -379,10 +379,14 @@ fichier) : `python seiscomp_xml_to_obs.py`.
 
 ## Installer un profil dans SeisComP : `profil_vers_seiscomp.py`
 
-`profil_vers_seiscomp.py` prépare un profil local pour le plugin NonLinLoc
-de SeisComP (`locnll`, dans scolv), sur l'instance OAR de chacun ou sur un
-serveur de test. scolv localise alors avec exactement les grilles calculées
-en local. Le script ne se connecte à rien et n'écrit rien en base : il
+`profil_vers_seiscomp.py` prépare un profil local pour SeisComP, sur
+l'instance OAR de chacun :
+- pour le localisateur NonLinLoc (plugin `locnll`, dans scolv) ;
+- pour scrtdd : les grilles sont déclarées comme table de temps de trajet
+  SeisComP (plugin `tttnll`, fourni avec scrtdd, interface `NLLGrid`), et
+  un profil scrtdd du même nom s'en sert.
+
+NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local. Le script ne se connecte à rien et n'écrit rien en base : il
 remplit un dossier, et `INSTALLER.txt` donne les commandes à copier.
 
 ```bash
@@ -405,15 +409,24 @@ dossier `<racine>/export_seiscomp/<profil>/` contient :
 | --- | --- |
 | `NLL.<profil>.conf` | Fichier de contrôle, avec les chemins de la machine SeisComP (`${NLLROOT}` remplacé) |
 | `topo.asc` | Topographie, copiée même si elle vient d'un autre profil |
-| `time/` | Grilles de temps (P et S) des stations des runs |
+| `time/` | Grilles de temps (P et S) des stations des runs, et grilles du modèle (`.mod`, exigées par `tttnll`) |
 | `scolv-NLL.cfg` | Configuration du plugin pour une première installation : `plugins`, `NLLROOT`, `NonLinLoc.profiles` et les lignes du profil |
 | `locnll_<profil>.cfg` | Les seules lignes du profil (`earthModelID`, `tablePath`, `controlFile`, `stationNameFormat`, `region`), à ajouter à un `scolv-NLL.cfg` existant |
+| `scrtdd-NLL.cfg` | Pour scrtdd, première installation : plugin `tttnll`, `ttt.NLLGrid.tables`, la table du profil et le profil scrtdd |
+| `scrtdd_<profil>.cfg` | La table (`ttt.NLLGrid.<profil>.tablePath`) et le profil scrtdd seuls (`tableType = NLLGrid`, `tableModel`, `region`), à ajouter à une configuration scrtdd qui a déjà `tttnll` |
 | `INSTALLER.txt` | Commandes à copier, dans l'ordre |
 
 La configuration va dans `~/.seiscomp/scolv-NLL.cfg`, une copie de
 `scolv-PROD.cfg` : la configuration habituelle de scolv reste intacte, et
 on lance `./LaunchScolv.bash NLL` pour localiser avec NonLinLoc. `region`
 est le rectangle de la grille de recherche (`LOCGRID`).
+
+Côté scrtdd, les lignes vont dans `~/.seiscomp/scrtdd.cfg`. Le profil
+scrtdd ne règle que la table de temps et la région : le reste garde les
+valeurs par défaut de scrtdd. Le plugin `tttnll` retrouve la grille d'une
+station par sa position et non par son nom : une station déplacée de plus
+de 10 m (`maxSearchDistance`) depuis le calcul des grilles n'a plus de
+temps de trajet.
 
 Le script s'arrête si le `TRANS` du fichier de contrôle n'est pas celui des
 grilles. Il signale aussi les stations des runs qui n'ont pas de grille :
@@ -638,7 +651,7 @@ NonLinLoc_ToolBox/
 ├── nll_run.py                 ← run NLL local : profil × période
 ├── fetch_picks.py             ← pointés d'une période depuis le serveur (fdsnws)
 ├── seiscomp_xml_to_obs.py     ← pointés SeisComP (XML déjà téléchargés) → NLLOC_OBS
-├── profil_vers_seiscomp.py    ← profil local → dossier à installer dans scolv (SeisComP)
+├── profil_vers_seiscomp.py    ← profil local → dossier à installer dans SeisComP (scolv, scrtdd)
 ├── scrtdd_inputs.py           ← fichiers d'entrée scrtdd à partir d'un run local
 ├── telecharger_formes_onde.py ← sur le serveur : formes d'onde pour scrtdd (FDSN + archive)
 ├── segment_from_zones.py      ← modèle 3D : découpage en tuiles

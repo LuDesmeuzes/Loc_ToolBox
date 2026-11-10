@@ -532,7 +532,7 @@ def test_fetch_cache_refuse_une_autre_zone(tmp_path):
 
 def test_profil_vers_seiscomp(tmp_path):
     from profil_vers_seiscomp import (check_trans, export_conf, grid_files, locgrid_region,
-                                      profile_runs, run_stations)
+                                      model_files, profile_runs, run_stations, scrtdd_block)
     profils, runs = tmp_path / "profils", tmp_path / "runs"
     (profils / "p1" / "time").mkdir(parents=True)
     (profils / "p0").mkdir()
@@ -556,8 +556,10 @@ def test_profil_vers_seiscomp(tmp_path):
     assert [r.name for r in found] == ["r1"]
     with pytest.raises(SystemExit, match="du profil p2"):
         profile_runs(runs, "p1", ["r2"])
+    (profils / "p1" / "time" / "layer.P.mod.hdr").write_text(hdr)
     files, without = grid_files(profils / "p1" / "time" / "layer", run_stations(found[0]))
     assert len(files) == 4 and without == ["SALSA"]
+    assert [f.name for f in model_files(profils / "p1" / "time" / "layer")] == ["layer.P.mod.hdr"]
 
     out = tmp_path / "export"
     out.mkdir()
@@ -570,3 +572,7 @@ def test_profil_vers_seiscomp(tmp_path):
 
     # ±50 km autour de 44,5° N 6,75° E, arrondi au centième vers l'extérieur
     assert locgrid_region(lines) == (44.04, 6.11, 44.95, 7.39)
+
+    block = scrtdd_block("p1", "/home/u/nll/p1/time/layer", locgrid_region(lines))
+    assert "ttt.NLLGrid.p1.tablePath = /home/u/nll/p1/time/layer" in block
+    assert "profile.p1.tableType = NLLGrid" in block and "profile.p1.tableModel = p1" in block
