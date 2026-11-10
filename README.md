@@ -123,7 +123,7 @@ mars 2024. Il faut l'accès au serveur fdsnws du Jura. Depuis le dossier
 
 ```bash
 python creer_profil.py --region exemple_jura --nom exemple_jura_1D \
-    --modele exemples/jura.nd --lat 46.95 47.55 --lon 5.45 7.55 \
+    --modele modeles_vitesse/jura.nd --lat 46.95 47.55 --lon 5.45 7.55 \
     --prof-max 50 --cellule 4 \
     --fdsnws http://ist-scjura-sig.u-ga.fr:8080/fdsnws
 ```
@@ -190,7 +190,7 @@ Les options obligatoires :
 | --- | --- | --- |
 | `--region` | Nom court de la région. Il nomme la configuration de la région (`<regions_dir>/<région>/config_<région>.yaml`) et le cache des pointés (`par_jour_<région>`). Plusieurs profils peuvent partager une région : un 1D puis un 3D, ou deux modèles à comparer. La configuration existante est alors gardée, à condition que le serveur, la zone et les types d'événements soient les mêmes. | `jura` |
 | `--nom` | Nom du profil. Il nomme le dossier `<profils_dir>/<profil>/`, c'est lui qu'on donne à `nll_run.py --profil`, et il apparaît dans le nom des runs (`<profil>_<début>_<fin>`). Quand le profil est la copie d'un profil NLL de SeisComP, reprendre le même nom. Sinon, l'usage est `<n°>_<région>_<1D ou 3D>[_topo]`. | `1_jura_1D_topo` |
-| `--modele` | Modèle de vitesse 1D (formats ci-dessous). Pour un modèle 3D, voir `--modele-3d` plus bas. | `exemples/jura.nd` |
+| `--modele` | Modèle de vitesse 1D (formats ci-dessous). Pour un modèle 3D, voir `--modele-3d` plus bas. | `modeles_vitesse/jura.nd` |
 | `--lat`, `--lon` | Zone des séismes à localiser, en degrés : latitudes min et max, longitudes min et max (est positif). Les pointés sont récupérés dans cette zone, et la grille de recherche la couvre, plus `--marge`. Les stations peuvent être en dehors. | `--lat 46.95 47.55 --lon 5.45 7.55` |
 | `--fdsnws` | Adresse fdsnws du serveur SeisComP de la région, jusqu'à `/fdsnws` : le script y ajoute `/event/1/query` et `/station/1/query`. | `http://ist-scjura-sig.u-ga.fr:8080/fdsnws` |
 
@@ -201,10 +201,11 @@ Modèles acceptés :
 - **`.nd`** (format TauP) : « profondeur Vp Vs densité » par ligne ; une
   discontinuité = deux lignes à la même profondeur ; les lignes de texte
   (`mantle`…) sont ignorées. Entre deux profondeurs, la vitesse varie
-  linéairement. Exemple : `exemples/jura.nd`.
+  linéairement. Exemple : `modeles_vitesse/jura.nd`.
 - **texte en couches** : « toit Vp Vs [densité] » par ligne, en km et km/s,
   vitesses constantes dans chaque couche, commentaires après `#`.
-  Exemples : `exemples/alpes_labo.txt`, `exemples/alpes_paul2001.txt`.
+  Exemples : `modeles_vitesse/alpes_labo.txt`, `modeles_vitesse/alpes_paul2001.txt`,
+  `modeles_vitesse/auvergne_40km.txt`.
 
 Profondeurs en km sous le niveau de la mer. La première couche est
 prolongée jusqu'à −5 km pour couvrir le relief.
@@ -556,12 +557,15 @@ dans `nll_common.py`.
 - `docs/vel2grid_grid2time.in.example` : fichier Vel2Grid + Grid2Time
   commenté pour un modèle 1D, pour comprendre ce qu'écrit
   `creer_profil.py` ou le faire à la main.
-- `exemples/` : modèles 1D prêts à passer en `--modele` :
+- `modeles_vitesse/` : modèles 1D prêts à passer en `--modele` :
   - `jura.nd` : modèle du Jura, utilisé par le premier essai ;
   - `alpes_labo.txt` : modèle à 4 couches du laboratoire, celui du profil
     SeisComP `1D_ubaye` et des profils 1D du Mont-Blanc ;
   - `alpes_paul2001.txt` : modèle à 7 couches de Paul et al. (2001), réseau
-    Sismalp (profil `05_ubaye_1D_paul2001`).
+    Sismalp (profil `05_ubaye_1D_paul2001`) ;
+  - `auvergne_40km.txt` : modèle « auvergne-40km » des tables LOCSAT,
+    retrouvé à partir des temps de trajet ; utilisé pour l'essaim d'Ambert
+    (profil `05_ambert_1D_auvergne_topo`).
 
 ## Tests
 
@@ -594,7 +598,7 @@ NonLinLoc_ToolBox/
 ├── segment_from_zones.py      ← modèle 3D : découpage en tuiles
 ├── nll_pipeline.py            ← modèle 3D : fichiers NLL de chaque tuile, topographie
 ├── nll_common.py              ← code partagé (projection, configuration, lecture)
-├── exemples/                  ← modèles 1D (Jura, Alpes)
+├── modeles_vitesse/           ← modèles de vitesse 1D (Jura, Alpes, Auvergne)
 ├── tests/                     ← tests unitaires (pytest)
 └── docs/                      ← tutoriel NLL/SeisComP + exemple de fichier .in
 ```
