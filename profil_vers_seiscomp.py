@@ -1,12 +1,16 @@
 """
 profil_vers_seiscomp.py
 =======================
-Prépare un profil local (creer_profil.py, nll_run.py) pour le plugin
-NonLinLoc de SeisComP (locnll, dans scolv) : un dossier à copier tel quel
-sur la machine SeisComP, avec le fichier de contrôle, la topographie, les
-grilles de temps et les lignes de configuration SeisComP.
+Prépare un profil local (creer_profil.py, nll_run.py) pour SeisComP : un
+dossier à copier tel quel sur la machine SeisComP, avec le fichier de
+contrôle, la topographie, les grilles de temps et les lignes de
+configuration pour :
+  - le localisateur NonLinLoc (plugin locnll, dans scolv) ;
+  - scrtdd : les grilles sont déclarées comme table de temps de trajet
+    SeisComP (plugin tttnll de scrtdd, interface NLLGrid), et un profil
+    scrtdd du même nom les utilise.
 
-Le serveur localise ainsi avec exactement les grilles calculées en local,
+NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local,
 sans les recalculer. Seules les grilles des stations pointées dans les runs
 du profil sont copiées (tous les runs de <run.runs_dir> dont run.yaml
 nomme ce profil, ou ceux de --run).
@@ -23,11 +27,16 @@ Sorties (dans <racine>/export_seiscomp/<profil>/, à copier dans
 <nllroot>/<profil>/) :
   - NLL.<profil>.conf     : fichier de contrôle NLL
   - topo.asc              : topographie (si le profil en a une)
-  - time/                 : grilles de temps (.hdr, .buf) des stations des runs
+  - time/                 : grilles de temps (.hdr, .buf) des stations des
+                            runs, et grilles du modèle (.mod, exigées par tttnll)
   - scolv-NLL.cfg         : configuration SeisComP complète du plugin, pour
                             une première installation (plugin, NLLROOT, profil)
   - locnll_<profil>.cfg   : lignes du seul profil, à ajouter à un
                             scolv-NLL.cfg existant
+  - scrtdd-NLL.cfg        : pour scrtdd, première installation : plugin
+                            tttnll, table NLLGrid et profil scrtdd
+  - scrtdd_<profil>.cfg   : table et profil scrtdd seuls, à ajouter à une
+                            configuration scrtdd qui a déjà tttnll
   - INSTALLER.txt         : commandes à copier, dans l'ordre
 
 Le script ne se connecte pas au serveur et n'écrit rien en base.
@@ -100,6 +109,12 @@ def grid_files(grid_root, stations):
     return files, without
 
 
+def model_files(grid_root):
+    """Grilles du modèle (<préfixe>.P.mod.*, <préfixe>.S.mod.*), à côté des grilles de temps."""
+    grid_root = Path(grid_root)
+    return sorted(grid_root.parent.glob(f"{grid_root.name}.[PS].mod.*"))
+
+
 def hdr_trans(hdr_path):
     """(LatOrig, LongOrig, RotCW) de la ligne TRANSFORM d'un .hdr de grille."""
     text = Path(hdr_path).read_text()
@@ -168,6 +183,30 @@ def profile_block(profil, grid_prefix, region):
     ]) + "\n"
 
 
+def scrtdd_block(profil, table_path, region):
+    """Table NLLGrid du profil et profil scrtdd qui l'utilise (chemins complets)."""
+    t, p = f"ttt.NLLGrid.{profil}", f"profile.{profil}"
+    return "\n".join([
+        f"{t}.tablePath = {table_path}",
+        f"{p}.tableType = NLLGrid",
+        f"{p}.tableModel = {profil}",
+        f"{p}.regionType = RECTANGULAR",
+        f"{p}.region = {region[0]:.2f}, {region[1]:.2f}, {region[2]:.2f}, {region[3]:.2f}",
+    ]) + "\n"
+
+
+def scrtdd_cfg(profil, block):
+    """scrtdd-NLL.cfg d'une première installation : plugin tttnll, liste des tables, un profil."""
+    return "\n".join([
+        "# Grilles NLL comme table de temps de trajet SeisComP (plugin tttnll de",
+        "# scrtdd) et profil scrtdd qui les utilise, écrits par",
+        "# profil_vers_seiscomp.py (NonLinLoc_ToolBox). Voir INSTALLER.txt.",
+        "plugins = ${plugins}, tttnll",
+        f"ttt.NLLGrid.tables = {profil}",
+        "",
+    ]) + block
+
+
 def scolv_cfg(profil, nllroot, block):
     """scolv-NLL.cfg d'une première installation : plugin, chemins, un profil."""
     return "\n".join([
@@ -219,6 +258,25 @@ grep "^NonLinLoc.profiles" ~/.seiscomp/scolv-NLL.cfg
 4. Essai : ouvrir un événement de la zone, choisir le localisateur
    NonLinLoc et le profil {profil}, puis Relocate. Comparer à la
    localisation locale du même événement (runs/<run>/<run>.hyp).
+
+5. scrtdd avec les mêmes grilles (plugin tttnll). Vérifier qu'il est là :
+
+ls ~/seiscomp/share/plugins | grep tttnll
+
+   Première installation (pas encore de tttnll dans ~/.seiscomp/scrtdd.cfg) :
+
+cat {nllroot}/{profil}/scrtdd-NLL.cfg >> ~/.seiscomp/scrtdd.cfg
+
+   Profil ajouté à une configuration qui a déjà tttnll : table et profil,
+   puis le nom ajouté à la liste ttt.NLLGrid.tables.
+
+cat {nllroot}/{profil}/scrtdd_{profil}.cfg >> ~/.seiscomp/scrtdd.cfg
+sed -i 's/^ttt.NLLGrid.tables = .*/&, {profil}/' ~/.seiscomp/scrtdd.cfg
+grep "^ttt.NLLGrid.tables" ~/.seiscomp/scrtdd.cfg
+
+   Le profil scrtdd {profil} ne règle que la table de temps et la région :
+   les autres réglages gardent leur valeur par défaut. On l'appelle avec
+   --profile {profil}, par exemple avec --reloc-catalog.
 """
 
 
@@ -280,8 +338,13 @@ def main():
     if not files:
         raise SystemExit(f"Aucune grille de temps pour ces stations dans {grid_root.parent}")
 
+    models = model_files(grid_root)
+    if not models:
+        log(f"⚠ Pas de grilles du modèle ({grid_root.name}.P.mod.*) à côté des grilles de temps : "
+            "NLL fonctionnera, pas scrtdd (tttnll)", 1)
     lines, copied = export_conf(conf_path, profils_dir, remote_dir, out_dir)
-    check_trans(lines, [f for f in files if f.suffix == ".hdr"])
+    check_trans(lines, [f for f in files + models if f.suffix == ".hdr"])
+    files += models
     for f in files:
         shutil.copy2(f, out_dir / "time" / f.name)
     size = sum(f.stat().st_size for f in files) / 1e6
@@ -293,6 +356,9 @@ def main():
     block = profile_block(args.profil, grid_root.name, region)
     (out_dir / f"locnll_{args.profil}.cfg").write_text(block)
     (out_dir / "scolv-NLL.cfg").write_text(scolv_cfg(args.profil, nllroot, block))
+    dd_block = scrtdd_block(args.profil, f"{remote_dir}/time/{grid_root.name}", region)
+    (out_dir / f"scrtdd_{args.profil}.cfg").write_text(dd_block)
+    (out_dir / "scrtdd-NLL.cfg").write_text(scrtdd_cfg(args.profil, dd_block))
     n_stations = len(stations) - len(without)
     (out_dir / "INSTALLER.txt").write_text(
         installer_text(args.profil, f"{args.utilisateur}@{args.hote}", nllroot, out_dir, n_stations))
