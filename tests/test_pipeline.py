@@ -528,3 +528,45 @@ def test_fetch_cache_refuse_une_autre_zone(tmp_path):
     check_cache(autre, tmp_path, refresh=True)
     assert not (tmp_path / "2019-01-01.xml").exists()
     check_cache(autre, tmp_path)
+
+
+def test_profil_vers_seiscomp(tmp_path):
+    from profil_vers_seiscomp import (check_trans, export_conf, grid_files, locgrid_region,
+                                      profile_runs, run_stations)
+    profils, runs = tmp_path / "profils", tmp_path / "runs"
+    (profils / "p1" / "time").mkdir(parents=True)
+    (profils / "p0").mkdir()
+    (profils / "p0" / "topo.asc").write_text("topo")
+    (profils / "p1" / "NLL.p1.conf").write_text(
+        "# commentaire\nTRANS AZIMUTHAL_EQUIDIST WGS-84 44.5 6.75 0\n"
+        "LOCGRID  101 101 36 -50 -50 -5.0000  1.0000 1.0000 1.0000  PROB_DENSITY  SAVE\n"
+        "LOCTOPO_SURFACE ${NLLROOT}/p0/topo.asc 0\n")
+    hdr = ("1 401 66 0 0 -5 1 1 1 TIME2D FLOAT\nSTA 0 0 0\n"
+           "TRANSFORM  AZIMUTHAL_EQUIDIST RefEllipsoid WGS-84  LatOrig 44.500000  "
+           "LongOrig 6.750000  RotCW 0.000000\n")
+    for phase in "PS":
+        (profils / "p1" / "time" / f"layer.{phase}.OGAG.time.hdr").write_text(hdr)
+        (profils / "p1" / "time" / f"layer.{phase}.OGAG.time.buf").write_text("")
+    for name, profil in (("r1", "p1"), ("r2", "p2")):
+        (runs / name).mkdir(parents=True)
+        (runs / name / "run.yaml").write_text(f"profil: {profil}\n")
+        (runs / name / "phases.csv").write_text("event_id,station\ne1,OGAG\ne1,SALSA\n")
+
+    found = profile_runs(runs, "p1")
+    assert [r.name for r in found] == ["r1"]
+    with pytest.raises(SystemExit, match="du profil p2"):
+        profile_runs(runs, "p1", ["r2"])
+    files, without = grid_files(profils / "p1" / "time" / "layer", run_stations(found[0]))
+    assert len(files) == 4 and without == ["SALSA"]
+
+    out = tmp_path / "export"
+    out.mkdir()
+    lines, copied = export_conf(profils / "p1" / "NLL.p1.conf", profils, "/home/u/nll/p1", out)
+    assert copied == ["topo.asc"] and (out / "topo.asc").exists()
+    assert "LOCTOPO_SURFACE /home/u/nll/p1/topo.asc 0" in lines
+    check_trans(lines, [f for f in files if f.suffix == ".hdr"])
+    with pytest.raises(SystemExit, match="autre profil"):
+        check_trans([l.replace("6.75", "6.80") for l in lines], files[:1])
+
+    # ±50 km autour de 44,5° N 6,75° E, arrondi au centième vers l'extérieur
+    assert locgrid_region(lines) == (44.04, 6.11, 44.95, 7.39)
