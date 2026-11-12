@@ -358,6 +358,86 @@ def test_scrtdd_build_tables():
     assert stations == {("FR", "SURF", "00")}
 
 
+def test_scrtdd_filtres_rms_et_phases():
+    from datetime import date, datetime
+
+    from scrtdd_inputs import build_tables, select_events
+
+    def ev(eid, rms):
+        return {"event_id": eid, "status": "LOCATED", "time": datetime(2024, 12, 1),
+                "latitude": 44.5, "longitude": 6.8, "depth": 3.0, "rms": rms}
+
+    events = select_events([ev("a", 0.1), ev("b", 0.8), ev("c", None)], date(2024, 12, 1),
+                           date(2024, 12, 1), rms_max=0.5)
+    assert [e["event_id"] for e in events] == ["a"]
+    assert len(select_events([ev("a", 0.1), ev("b", 0.8)])) == 2
+
+    def phase(sta):
+        return {"station": sta, "phase": "P", "time": datetime(2024, 12, 1, 0, 0, 5),
+                "network": "FR", "location": "", "channel": "HHZ", "lower_s": None, "upper_s": None}
+
+    xml = {"a": {"origin_id": "o", "magnitude": None, "phases": [phase("S1"), phase("S2")]}}
+    assert build_tables(events, xml, set(), min_phases=3)[0] == []
+    assert len(build_tables(events, xml, set(), min_phases=2)[0]) == 1
+
+
+def test_scrtdd_modele_et_profil():
+    from scrtdd_inputs import MODELS_DIR, apply_overrides, cfg_value, load_model, profile_cfg
+
+    # Les modèles du dépôt se chargent par leur nom et ont les deux sections
+    assert {p.stem for p in MODELS_DIR.glob("*.yaml")} >= {"essaim", "region"}
+    _, model = load_model("essaim")
+    assert model["entrees"]["phases_min"] == 8 and model["profil"]["crossCorrelation.enable"] is True
+
+    changes = apply_overrides(model, ["solver.dampingFactor=0.05", "entrees.rms_max=null",
+                                      "crossCorrelation.enable=false",
+                                      "solver.downWeightingByResidual=[8, 4]"])
+    assert model["profil"]["solver.dampingFactor"] == 0.05 and model["entrees"]["rms_max"] is None
+    assert changes[0] == "solver.dampingFactor = 0.01 → 0.05"
+    # Une faute de frappe est refusée, avec la clé probable
+    with pytest.raises(SystemExit, match="solver.dampingFactor"):
+        apply_overrides(model, ["solver.dampingFacteur=0.1"])
+    with pytest.raises(SystemExit, match="clé=valeur"):
+        apply_overrides(model, ["solver.dampingFactor"])
+
+    assert cfg_value(True) == "true" and cfg_value([10, 5]) == "10, 5"
+    # Le filtre contient des virgules : entre guillemets, sinon lu comme une liste
+    assert cfg_value("ITAPER(1)>>BW_HLP(2,1,20)") == '"ITAPER(1)>>BW_HLP(2,1,20)"'
+    cfg = profile_cfg("ubaye_dec24", model["profil"], "05_ubaye_1D_topo", (44.04, 6.11, 44.95, 7.39),
+                      ["en-tête"])
+    lines = cfg.splitlines()
+    assert lines[0] == "# en-tête"
+    assert "profile.ubaye_dec24.tableType = NLLGrid" in lines
+    assert "profile.ubaye_dec24.tableModel = 05_ubaye_1D_topo" in lines
+    assert "profile.ubaye_dec24.region = 44.04, 6.11, 44.95, 7.39" in lines
+    assert "profile.ubaye_dec24.crossCorrelation.enable = false" in lines
+    assert "profile.ubaye_dec24.solver.downWeightingByResidual = 8, 4" in lines
+    # Un modèle peut remplacer la table de temps (ex. LOCSAT) : une seule ligne tableType
+    cfg = profile_cfg("e", {"tableType": "LOCSAT", "tableModel": "iasp91"}, "p", (0, 0, 1, 1), [])
+    assert cfg.count("tableType") == 1 and "profile.e.tableType = LOCSAT" in cfg
+
+
+def test_scrtdd_lancer():
+    from datetime import date
+
+    from scrtdd_inputs import lancer_text
+
+    counts = {"evenements": 120, "phases": 2400, "stations": 30, "fenetres": 2000}
+    text = lancer_text("ubaye_dec24", "r1", date(2024, 12, 1), date(2025, 2, 28), "essaim",
+                       ["solver.dampingFactor = 0.01 → 0.05"], counts, "u@ist-oar",
+                       "/home/u/scrtdd/r1/ubaye_dec24", "/local/r1/scrtdd/ubaye_dec24",
+                       "/home/u/sds/r1", "05_ubaye_1D_topo", 33, True)
+    assert "--profile ubaye_dec24" in text and "-I sdsarchive:///home/u/sds/r1" in text
+    assert 'grep -c "^profile.ubaye_dec24\\." ~/.seiscomp/scrtdd.cfg' in text
+    assert "rsync -avz --exclude mseed/ u@ist-oar:/home/u/scrtdd/r1/ubaye_dec24/ " in text
+    # Commandes à copier : pas de commentaire # (zsh) ni de repère <…>
+    commands = [l for l in text.splitlines() if l and not l.startswith(" ") and "=" not in l[:3]]
+    assert not any("#" in l or "<" in l for l in commands if l.startswith(("ssh", "rsync", "grep", "cat", "seiscomp", "python3", "cd")))
+    sans_cc = lancer_text("e", "r1", date(2024, 12, 1), date(2025, 2, 28), "essaim", [], counts,
+                          "u@h", "/r", "/l", "/a", "p", 3, False)
+    assert "sdsarchive" not in sans_cc and "telecharger_formes_onde" not in sans_cc
+
+
 def test_scrtdd_reference_positions(tmp_path):
     from datetime import datetime
 
@@ -573,9 +653,8 @@ def test_profil_vers_seiscomp(tmp_path):
     # ±50 km autour de 44,5° N 6,75° E, arrondi au centième vers l'extérieur
     assert locgrid_region(lines) == (44.04, 6.11, 44.95, 7.39)
 
-    block = scrtdd_block("p1", "/home/u/nll/p1/time/layer", locgrid_region(lines))
-    assert "ttt.NLLGrid.p1.tablePath = /home/u/nll/p1/time/layer" in block
-    assert "profile.p1.tableType = NLLGrid" in block and "profile.p1.tableModel = p1" in block
+    block = scrtdd_block("p1", "/home/u/nll/p1/time/layer")
+    assert block == "ttt.NLLGrid.p1.tablePath = /home/u/nll/p1/time/layer\n"
 
 
 def test_profil_vers_seiscomp_xml_screloc(tmp_path):

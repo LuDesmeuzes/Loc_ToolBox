@@ -7,8 +7,9 @@ contrôle, la topographie, les grilles de temps et les lignes de
 configuration pour :
   - le localisateur NonLinLoc (plugin locnll, dans scolv) ;
   - scrtdd : les grilles sont déclarées comme table de temps de trajet
-    SeisComP (plugin tttnll de scrtdd, interface NLLGrid), et un profil
-    scrtdd du même nom les utilise.
+    SeisComP (plugin tttnll de scrtdd, interface NLLGrid), au nom du profil.
+    Les profils scrtdd qui l'utilisent viennent de chaque essai
+    (scrtdd_inputs.py).
 
 NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local,
 sans les recalculer. Pour relocaliser avec screloc toute la période des
@@ -38,9 +39,9 @@ Sorties (dans <racine>/export_seiscomp/<profil>/, à copier dans
   - locnll_<profil>.cfg   : lignes du seul profil, à ajouter à un
                             scolv-NLL.cfg existant
   - scrtdd-NLL.cfg        : pour scrtdd, première installation : plugin
-                            tttnll, table NLLGrid et profil scrtdd
-  - scrtdd_<profil>.cfg   : table et profil scrtdd seuls, à ajouter à une
-                            configuration scrtdd qui a déjà tttnll
+                            tttnll et table NLLGrid du profil
+  - scrtdd_<profil>.cfg   : table seule, à ajouter à une configuration
+                            scrtdd qui a déjà tttnll
   - screloc.cfg           : configuration de screloc (plugin, profil, origines
                             manuelles acceptées), à copier dans ~/.seiscomp/
   - screloc/entree/       : XML journaliers des périodes des runs (absents
@@ -223,24 +224,21 @@ def profile_block(profil, grid_prefix, region):
     ]) + "\n"
 
 
-def scrtdd_block(profil, table_path, region):
-    """Table NLLGrid du profil et profil scrtdd qui l'utilise (chemins complets)."""
-    t, p = f"ttt.NLLGrid.{profil}", f"profile.{profil}"
-    return "\n".join([
-        f"{t}.tablePath = {table_path}",
-        f"{p}.tableType = NLLGrid",
-        f"{p}.tableModel = {profil}",
-        f"{p}.regionType = RECTANGULAR",
-        f"{p}.region = {region[0]:.2f}, {region[1]:.2f}, {region[2]:.2f}, {region[3]:.2f}",
-    ]) + "\n"
+def scrtdd_block(profil, table_path):
+    """
+    Table NLLGrid du profil (chemin complet des grilles). Les profils scrtdd
+    qui l'utilisent (tableModel = <profil>) sont écrits par scrtdd_inputs.py,
+    un par essai.
+    """
+    return f"ttt.NLLGrid.{profil}.tablePath = {table_path}\n"
 
 
 def scrtdd_cfg(profil, block):
     """scrtdd-NLL.cfg d'une première installation : plugin tttnll, liste des tables, un profil."""
     return "\n".join([
         "# Grilles NLL comme table de temps de trajet SeisComP (plugin tttnll de",
-        "# scrtdd) et profil scrtdd qui les utilise, écrits par",
-        "# profil_vers_seiscomp.py (Loc_ToolBox). Voir INSTALLER.txt.",
+        "# scrtdd), écrites par profil_vers_seiscomp.py (Loc_ToolBox). Les",
+        "# profils scrtdd viennent des essais (scrtdd_inputs.py, LANCER.txt).",
         "plugins = ${plugins}, tttnll",
         f"ttt.NLLGrid.tables = {profil}",
         "",
@@ -332,16 +330,16 @@ seiscomp exec bash -c 'ls $SEISCOMP_ROOT/share/plugins' | grep tttnll
 
 cat {nllroot}/{profil}/scrtdd-NLL.cfg >> ~/.seiscomp/scrtdd.cfg
 
-   Profil ajouté à une configuration qui a déjà tttnll : table et profil,
-   puis le nom ajouté à la liste ttt.NLLGrid.tables.
+   Table ajoutée à une configuration qui a déjà tttnll : chemin des
+   grilles, puis le nom ajouté à la liste ttt.NLLGrid.tables.
 
 cat {nllroot}/{profil}/scrtdd_{profil}.cfg >> ~/.seiscomp/scrtdd.cfg
 sed -i 's/^ttt.NLLGrid.tables = .*/&, {profil}/' ~/.seiscomp/scrtdd.cfg
 grep "^ttt.NLLGrid.tables" ~/.seiscomp/scrtdd.cfg
 
-   Le profil scrtdd {profil} ne règle que la table de temps et la région :
-   les autres réglages gardent leur valeur par défaut. On l'appelle avec
-   --profile {profil}, par exemple avec --reloc-catalog.
+   Les profils scrtdd qui utilisent cette table viennent de chaque essai :
+   scrtdd_inputs.py --run <run> --essai <nom> écrit le profil, les entrées
+   et les commandes (LANCER.txt).
 
 6. screloc sur toute la période des runs ({n_events} événements), à partir
    des mêmes origines et pointés qu'en local. Rien n'est écrit en base :
@@ -453,7 +451,7 @@ def main():
     (out_dir / f"locnll_{args.profil}.cfg").write_text(block)
     pick_error = (config["phases"].get("default_error_s") or {}).get("P", 0.02)
     (out_dir / "scolv-NLL.cfg").write_text(scolv_cfg(args.profil, nllroot, block, pick_error))
-    dd_block = scrtdd_block(args.profil, f"{remote_dir}/time/{grid_root.name}", region)
+    dd_block = scrtdd_block(args.profil, f"{remote_dir}/time/{grid_root.name}")
     (out_dir / f"scrtdd_{args.profil}.cfg").write_text(dd_block)
     (out_dir / "scrtdd-NLL.cfg").write_text(scrtdd_cfg(args.profil, dd_block))
     (out_dir / "screloc.cfg").write_text(screloc_cfg(args.profil, nllroot, block, pick_error))

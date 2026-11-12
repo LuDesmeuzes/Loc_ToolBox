@@ -1,0 +1,66 @@
+# Modèle d'essai scrtdd : essaim de quelques kilomètres (Ubaye, Ambert).
+#
+# Lu par scrtdd_inputs.py (--modele essaim), qui en tire le profil scrtdd de
+# l'essai (scrtdd_<essai>.cfg) et le recopie, valeurs effectives comprises,
+# dans essai.yaml. Pour changer une valeur sans toucher à ce fichier :
+#   --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
+# Pour un jeu de réglages durable : copier ce fichier et passer --modele <copie>.
+#
+# Noms des paramètres : scrtdd 2.x, sans le préfixe profile.<essai>. (ils ont
+# changé depuis la 1.8 : vérifier dans le log que les valeurs sont prises).
+# « défaut » = valeur par défaut de scrtdd 2.x, écrite ici pour être visible.
+
+description: Essaim de quelques kilomètres, avec corrélation croisée
+
+# Tri des événements du run NLL avant scrtdd
+entrees:
+  # RMS NLL maximal (s) ; null = pas de tri. Un événement mal localisé
+  # dégrade ses voisins (Jura : RMS DD de départ 0,66 s contre 0,34 s).
+  rms_max: 0.5
+  # Nombre minimal de phases pointées. Sous minNumPhases (8), un événement ne
+  # peut former aucun couple : il ne sert qu'à alourdir le calcul.
+  phases_min: 8
+
+# Paramètres du profil scrtdd (profile.<essai>.<nom>). La table de temps
+# (NLLGrid, grilles du profil NLL du run) et la région (LOCGRID) sont ajoutées
+# par le script ; tableType / tableModel ici les remplaceraient.
+profil:
+  # Phases : nos pointés sont des P et des S ; les grilles NLL ne donnent que
+  # la première arrivée, d'où PSTableOnly.
+  P-Phases: [P, Pg]
+  S-Phases: [S, Sg]
+  PSTableOnly: true
+
+  # Couples d'événements
+  doubleDifferenceSystem.eventFiltering.minNumPhases: 8            # défaut
+  doubleDifferenceSystem.eventFiltering.minNumNeighbours: 4        # défaut
+  doubleDifferenceSystem.phaseFiltering.minStationToEventPairDistRatio: 3   # défaut
+  # Voisins : les 40 plus proches à moins de 5 km (défauts)
+  doubleDifferenceSystem.eventPairSelection.multiEvent.maxNumNeighbours: 40
+  doubleDifferenceSystem.eventPairSelection.multiEvent.maxNeighbourDistance: 5
+  doubleDifferenceSystem.eventPairSelection.multiEvent.numEllipsoids: 0
+
+  # Corrélation croisée (false : temps pointés seuls, sans formes d'onde)
+  crossCorrelation.enable: true
+  crossCorrelation.maxStationDistance: 60                          # défaut (km)
+  # Couples à moins de 3 km (défaut 2) : réglage des essais Ubaye et Jura
+  crossCorrelation.maxInterEventDistance: 3
+  crossCorrelation.p-phase.minCCCoef: 0.7                          # défaut
+  crossCorrelation.s-phase.minCCCoef: 0.7                          # défaut
+  crossCorrelation.p-phase.components: [Z]                         # défaut
+  # Norme des horizontales : il faut l'orientation des composantes, donc les
+  # stations dans l'inventaire de la base (sinon les S ne corrèlent pas)
+  crossCorrelation.s-phase.components: [L2]                        # défaut
+  # Pas de filtre par défaut en 2.x ; celui de scrtdd 1.x (passe-bande 1–20 Hz)
+  crossCorrelation.waveformFiltering.filterString: ITAPER(1)>>BW_HLP(2,1,20)
+
+  # Inversion
+  solver.solverType: LSMR                                          # défaut
+  solver.algoIterations: 20                                        # défaut
+  solver.downWeightingByResidual: [10, 5]                          # défaut
+  solver.dampingFactor: 0.01                                       # défaut
+  # Poids des temps absolus : retient la position d'ensemble du nuage
+  solver.absoluteLocationConstraint: 0.3                           # défaut
+  solver.xcorrWeightScaler: 2.0                                    # défaut
+  # Presque aucun pointé n'a d'incertitude (0,02 s partout en local)
+  solver.usePickUncertainties: false

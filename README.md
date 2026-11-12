@@ -402,8 +402,9 @@ fichier) : `python seiscomp_xml_to_obs.py`.
 l'instance OAR de chacun :
 - pour le localisateur NonLinLoc (plugin `locnll`, dans scolv) ;
 - pour scrtdd : les grilles sont déclarées comme table de temps de trajet
-  SeisComP (plugin `tttnll`, fourni avec scrtdd, interface `NLLGrid`), et
-  un profil scrtdd du même nom s'en sert.
+  SeisComP (plugin `tttnll`, fourni avec scrtdd, interface `NLLGrid`), au
+  nom du profil. Les profils scrtdd qui s'en servent viennent de chaque
+  essai (`scrtdd_inputs.py`, voir [Relocaliser avec scrtdd](#relocaliser-avec-scrtdd-sur-le-serveur)).
 
 NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local.
 Le dossier permet aussi de relocaliser avec screloc toute la période des
@@ -437,8 +438,8 @@ dossier `<racine>/export_seiscomp/<profil>/` contient :
 | `time/` | Grilles de temps (P et S) des stations des runs, et grilles du modèle (`.mod`, exigées par `tttnll`) |
 | `scolv-NLL.cfg` | Configuration du plugin pour une première installation : `plugins`, `NLLROOT`, `NonLinLoc.profiles` et les lignes du profil |
 | `locnll_<profil>.cfg` | Les seules lignes du profil (`earthModelID`, `tablePath`, `controlFile`, `stationNameFormat`, `region`), à ajouter à un `scolv-NLL.cfg` existant |
-| `scrtdd-NLL.cfg` | Pour scrtdd, première installation : plugin `tttnll`, `ttt.NLLGrid.tables`, la table du profil et le profil scrtdd |
-| `scrtdd_<profil>.cfg` | La table (`ttt.NLLGrid.<profil>.tablePath`) et le profil scrtdd seuls (`tableType = NLLGrid`, `tableModel`, `region`), à ajouter à une configuration scrtdd qui a déjà `tttnll` |
+| `scrtdd-NLL.cfg` | Pour scrtdd, première installation : plugin `tttnll`, `ttt.NLLGrid.tables` et la table du profil |
+| `scrtdd_<profil>.cfg` | La table seule (`ttt.NLLGrid.<profil>.tablePath`), à ajouter à une configuration scrtdd qui a déjà `tttnll` |
 | `screloc.cfg` | Configuration de screloc : plugin et profil, `reloc.locator = NonLinLoc`, `reloc.allowManualOrigins = true` (les origines de départ sont les LOCSAT manuelles) |
 | `screloc/entree/` | XML journaliers des périodes des runs, copiés du cache de `fetch_picks.py` |
 | `INSTALLER.txt` | Commandes à copier, dans l'ordre |
@@ -458,9 +459,8 @@ screloc utilise aussi les arrivées désactivées par l'analyste
 d'écart entre les deux (validé sur novembre 2024, profil 1D de l'Ubaye :
 98 % des positions identiques à 10 m près à phases égales).
 
-Côté scrtdd, les lignes vont dans `~/.seiscomp/scrtdd.cfg`. Le profil
-scrtdd ne règle que la table de temps et la région : le reste garde les
-valeurs par défaut de scrtdd. Le plugin `tttnll` retrouve la grille d'une
+Côté scrtdd, les lignes vont dans `~/.seiscomp/scrtdd.cfg` ; les profils
+scrtdd viennent des essais. Le plugin `tttnll` retrouve la grille d'une
 station par sa position et non par son nom : une station déplacée de plus
 de 10 m (`maxSearchDistance`) depuis le calcul des grilles n'a plus de
 temps de trajet.
@@ -471,97 +471,111 @@ NLL ignore leurs phases, sur le serveur comme en local.
 
 ## Relocaliser avec scrtdd sur le serveur
 
-`scrtdd_inputs.py` prépare les fichiers d'entrée de scrtdd (double
-différence) à partir d'un run NLL local. scrtdd lit alors les positions de
-départ dans ces fichiers plutôt que dans la base : on relocalise sur le
-serveur, avec son profil scrtdd et ses formes d'onde, des localisations qui
-n'existent qu'en local.
+`scrtdd_inputs.py` prépare un **essai** scrtdd (double différence) à partir
+d'un run NLL local : les entrées de scrtdd, le profil scrtdd de l'essai et
+les commandes pour le lancer sur la machine SeisComP. scrtdd lit les
+positions de départ dans ces fichiers plutôt que dans la base : on
+relocalise sur le serveur des localisations qui n'existent qu'en local, avec
+les mêmes grilles de temps que NLL (plugin `tttnll`).
+
+Prérequis, une fois par profil NLL : le profil installé avec
+`profil_vers_seiscomp.py` (étape 5 de son `INSTALLER.txt` : plugin `tttnll`
+et table de temps du profil dans `~/.seiscomp/scrtdd.cfg`).
 
 ```bash
-python scrtdd_inputs.py --config <config de la région> --run 05_ubaye_1D_topo_20230514_20250630
-python scrtdd_inputs.py --config <config> --run <run> --debut 2024-12-01 --fin 2025-02-28
-python scrtdd_inputs.py --config <config> --run <run> --origines reference
+python scrtdd_inputs.py --config <config de la région> --run 05_ubaye_1D_topo_20230514_20250630 --essai ubaye_dec24 --debut 2024-12-01 --fin 2025-02-28
+python scrtdd_inputs.py --config <config> --run <run> --essai jura_v5 --modele region
+python scrtdd_inputs.py --config <config> --run <run> --essai ubaye_dec24_amorti --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
 ```
 
-Dans `<run>/scrtdd/` :
+### Réglages : modèles d'essai et `--set`
 
-- `event.csv` : les localisations du run (événements `LOCATED`), avec un
-  `id` scrtdd = 1, 2, … dans l'ordre chronologique ;
-- `phase.csv` : les pointés de l'origine de référence, relus dans les XML du
-  cache de `fetch_picks.py` (codes réseau, location et canal, nécessaires à
-  la corrélation croisée), sans les stations exclues du run ni celles
-  absentes de l'inventaire (scrtdd refuse le catalogue entier pour une
-  seule phase à station inconnue) ;
-- `station.csv` : positions de l'inventaire SeisComP, valides sur la
-  période ;
-- `eventlist_<run>.csv` : `origin,event` dans l'ordre des `id`, pour que
-  LocQuality relie les `id` scrtdd aux Event ID ;
-- `formes_onde_NN.post` : la liste des formes d'onde utiles à la corrélation
-  croisée, au format POST des services FDSN (`réseau station location
-  canaux début fin`) : une fenêtre par événement et par station pointée, de
-  20 s avant le premier pointé à 40 s après le dernier (`--marge-avant`,
-  `--marge-apres`), les 3 composantes ; 2000 fenêtres au plus par fichier ;
-- `telecharger_formes_onde.py` : copie du script du dépôt, à lancer sur le
-  serveur si son archive n'a pas toutes les stations (voir plus bas).
-  Python 3 seul (bibliothèque standard) et `scart`.
+Les réglages viennent d'un **modèle d'essai** (`modeles_scrtdd/`), un
+fichier YAML commenté en deux sections :
+
+- `entrees` : tri des événements du run avant scrtdd — `rms_max` (RMS NLL
+  maximal, s) et `phases_min` (nombre minimal de phases ; 8 par défaut,
+  comme `minNumPhases` : en dessous, un événement ne peut former aucun
+  couple) ;
+- `profil` : les paramètres du profil scrtdd, sous leur nom de scrtdd 2.x
+  (sans le préfixe `profile.<essai>.`). La table de temps (NLLGrid, grilles
+  du profil NLL du run) et la région (grille de recherche LOCGRID) sont
+  ajoutées par le script.
+
+| Modèle | Pour | Différence |
+|---|---|---|
+| `essaim` (défaut) | un essaim de quelques km (Ubaye, Ambert) | valeurs par défaut de scrtdd, corrélation croisée |
+| `region` | une région étendue (Jura, ~160 km) | inversion plus contrainte : `dampingFactor` 0,1, `absoluteLocationConstraint` 1,0 (Jura v4, à confirmer) |
+
+Pour changer une valeur le temps d'un essai : `--set <nom>=<valeur>`
+(répétable), par exemple `--set crossCorrelation.enable=false` ou
+`--set solver.downWeightingByResidual=[8,4]`. Le nom doit exister dans le
+modèle (une faute de frappe est refusée, scrtdd l'ignorerait en silence).
+Pour un jeu de réglages durable, ou un paramètre absent du modèle : copier
+le modèle et passer `--modele <chemin de la copie>`.
+
+### Le dossier de l'essai
+
+Dans `<run>/scrtdd/<essai>/` (`--sortie` pour un autre dossier ; `--force`
+remplace un essai existant, sorties rapatriées comprises) :
+
+| Fichier | Contenu |
+|---|---|
+| `event.csv` | les localisations gardées du run, `id` scrtdd = 1, 2, … dans l'ordre chronologique |
+| `phase.csv` | les pointés de l'origine de référence, relus dans les XML du cache de `fetch_picks.py`, sans les stations exclues du run ni celles absentes de l'inventaire (scrtdd refuserait tout le catalogue) |
+| `station.csv` | positions de l'inventaire SeisComP, valides sur la période |
+| `eventlist_<run>.csv` | `origin,event` dans l'ordre des `id` : LocQuality relie ainsi les `id` scrtdd aux Event ID |
+| `scrtdd_<essai>.cfg` | le profil scrtdd de l'essai (`profile.<essai>.*`), à ajouter à `~/.seiscomp/scrtdd.cfg` |
+| `essai.yaml` | run, période, modèle, modifications (`--set`), valeurs effectives, comptes (événements écartés par le tri), machine et dossiers |
+| `LANCER.txt` | **les commandes à copier, dans l'ordre** : copie, profil, formes d'onde, scrtdd, vérifications, rapatriement |
+| `formes_onde_NN.post` | formes d'onde utiles à la corrélation croisée, au format POST des services FDSN : une fenêtre par événement et par station pointée, de 20 s avant le premier pointé à 40 s après le dernier (`--marge-avant`, `--marge-apres`) |
+| `telecharger_formes_onde.py` | copie du script du dépôt, à lancer sur le serveur si son archive n'a pas toutes les stations |
+
+Le nom de l'essai est aussi celui du profil scrtdd : lettres, chiffres et
+`_`. Par défaut, l'essai est copié dans `/home/<utilisateur>/scrtdd/<run>/<essai>/`
+d'`ist-oar` (`--utilisateur`, `--hote`, `--dossier-distant`), et les formes
+d'onde rassemblées dans `/home/<utilisateur>/sds/<run>/`, commun aux essais
+du run (`--archive`).
 
 Avec `--origines reference`, les positions de départ sont celles de
 l'origine de référence du run (`evenements.csv`, en général le LOCSAT
-manuel), écrites par défaut dans `<run>/scrtdd_reference/` : mêmes
-événements, mêmes `id`, mêmes phases et mêmes stations que le jeu NLL, pour
-comparer les deux points de départ de la double différence.
+manuel) : mêmes événements, mêmes phases et mêmes stations que le jeu NLL,
+pour comparer les deux points de départ de la double différence.
 
 Les pointés dont le réseau diffère de l'inventaire (ex. `XX.GREVE` pour
 `9W.GREVE`) sont rattachés au réseau de l'inventaire. La magnitude vaut 0
 quand l'export fdsnws n'en donne pas.
 
-Sur le serveur, copier le dossier puis lancer scrtdd avec ces trois fichiers
-à la place d'une liste d'origines (syntaxe à vérifier avec `scrtdd --help`
-selon la version) :
+### À savoir
 
-```bash
-scrtdd --reloc-catalog station.csv,event.csv,phase.csv --profile <profil> --console=1 -v
-```
-
-- Si le profil scrtdd calcule les temps de trajet avec les grilles NLL
-  (plugin `tttnll`), copier aussi `model/` et `time/` du profil NLL : il faut
-  des grilles P **et** S pour toutes les stations de `station.csv`, y compris
-  celles où une seule phase est pointée (`nll_run.py --grilles` les calcule).
-- Les stations doivent être dans l'**inventaire de la base** du serveur qui
-  fait tourner scrtdd : sans l'orientation des composantes, les S ne sont
-  pas corrélées (Jura : 100 % d'échec en S à 8 stations). Importer leur
-  StationXML avec `seiscomp exec import_inv fdsnxml <fichier>`, vérifier avec
-  `seiscomp exec scinv check`, puis écrire dans la base avec
-  `seiscomp update-config inventory` (`scinv ls` lit les fichiers, pas la
-  base).
-- Si les formes d'onde de la région ne sont pas dans le recordstream par
-  défaut du serveur (le log l'indique : « waveforms … not available »),
-  rassembler les fenêtres dans une archive SDS à part, puis ajouter
-  `-I sdsarchive://<archive>` à la commande scrtdd :
-
-  ```bash
-  python3 telecharger_formes_onde.py --archive ~/sds/<run> --archive-serveur /data/sig/SDS
-  ```
-
+- **Version** : les noms de paramètres sont ceux de scrtdd 2.x ; beaucoup ont
+  changé depuis la 1.8. `LANCER.txt` fait vérifier dans le log que les
+  valeurs d'`essai.yaml` ont été prises.
+- **Grilles** : avec `tttnll`, il faut des grilles P **et** S pour toutes les
+  stations de `station.csv`, y compris celles où une seule phase est pointée
+  (`nll_run.py --grilles` les calcule, `profil_vers_seiscomp.py` les copie).
+- **Inventaire** : la corrélation des S demande l'orientation des
+  composantes, donc les stations dans l'inventaire de la base que lit scrtdd
+  (Jura sur une base de test : 100 % d'échec en S à 8 stations). Sur une
+  base de test, importer leur StationXML avec
+  `seiscomp exec import_inv fdsnxml <fichier>`, vérifier avec
+  `seiscomp exec scinv check`, puis `seiscomp update-config inventory`.
+  Ne rien importer dans une base de production.
+- **Formes d'onde** : si celles de la région ne sont pas dans le recordstream
+  de la machine (« not available » dans le log), `telecharger_formes_onde.py`
+  les rassemble dans une archive SDS dédiée, puis scrtdd la lit avec
+  `-I sdsarchive://<archive>` (les deux commandes sont dans `LANCER.txt`).
   Le script attribue chaque fenêtre à son centre de données public par le
-  routage EIDA (CH → ETH, FR et 6F → RESIF…) et la télécharge ; celles des
-  réseaux qu'aucun centre public ne sert (réseaux locaux, ex. 5C) sont
-  extraites de l'archive du serveur (`--archive-serveur`). Tout est rangé
-  avec `scart`, sans toucher à l'archive du serveur ; `bilan_formes_onde.txt`
-  résume ce qui vient d'où. `fdsnws_fetch` n'est pas utilisé : il n'est pas
-  installé avec tous les SeisComP. Exemple : Jura, où l'archive du serveur
-  n'avait presque pas de stations suisses.
-- Les formes d'onde téléchargées restent en cache : une relance sur les mêmes
-  événements est beaucoup plus rapide (Ambert : 7 min → 17 s de corrélation).
-- Les réglages du profil scrtdd dépendent de la région : ceux d'un essaim de
-  quelques kilomètres (Ambert) laissent dériver les profondeurs sur une
-  région de 160 km (Jura) ; y augmenter `solver.absoluteLocationConstraint`
-  et `solver.dampingFactor`, et vérifier dans le log (`Parameters:`) que les
-  valeurs ont été prises en compte.
+  routage EIDA (CH → ETH, FR et 6F → RESIF…) ; celles des réseaux qu'aucun
+  centre public ne sert (ex. 5C) sont extraites de l'archive de la machine
+  (`--archive-serveur`). Tout est rangé avec `scart`, sans toucher à
+  l'archive de la machine ; `bilan_formes_onde.txt` résume ce qui vient
+  d'où. Les formes d'onde restent en cache : une relance sur les mêmes
+  événements est bien plus rapide (Ambert : 7 min → 17 s de corrélation).
 
-Rapatrier ensuite les sorties de scrtdd (`reloc-event.csv`,
-`reloc-phase.csv`…) dans le même dossier : les scripts `dd_*` de
-LocQuality_ToolBox le lisent directement.
+Une fois les sorties rapatriées (`reloc-event.csv`, `reloc-phase.csv`,
+dossier de diagnostics), les scripts `dd_*` de LocQuality_ToolBox lisent
+directement le dossier de l'essai : l'ajouter à `compare.scrtdd_runs`.
 
 ## Modèle 3D : découper une tuile
 
@@ -695,12 +709,13 @@ Loc_ToolBox/
 ├── fetch_picks.py             ← pointés d'une période depuis le serveur (fdsnws)
 ├── seiscomp_xml_to_obs.py     ← pointés SeisComP (XML déjà téléchargés) → NLLOC_OBS
 ├── profil_vers_seiscomp.py    ← profil local → dossier à installer dans SeisComP (scolv, scrtdd)
-├── scrtdd_inputs.py           ← fichiers d'entrée scrtdd à partir d'un run local
+├── scrtdd_inputs.py           ← essai scrtdd à partir d'un run local (entrées, profil, LANCER.txt)
 ├── telecharger_formes_onde.py ← sur le serveur : formes d'onde pour scrtdd (FDSN + archive)
 ├── segment_from_zones.py      ← modèle 3D : découpage en tuiles
 ├── nll_pipeline.py            ← modèle 3D : fichiers NLL de chaque tuile, topographie
 ├── nll_common.py              ← code partagé (projection, configuration, lecture)
 ├── modeles_vitesse/           ← modèles de vitesse 1D (Jura, Alpes, Auvergne)
+├── modeles_scrtdd/            ← modèles d'essai scrtdd (essaim, région)
 ├── tests/                     ← tests unitaires (pytest)
 └── docs/                      ← tutoriel NLL/SeisComP + exemple de fichier .in
 ```
