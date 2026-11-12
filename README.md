@@ -365,10 +365,9 @@ l'inventaire du serveur, ou hors de la tuile en 3D
 profils sur les mêmes données).
 
 Pour qu'un run local reproduise SeisComP, `NLL.<profil>.conf` doit être à
-jour avec la configuration du profil sur le serveur. Sur novembre 2024 avec
-le profil `1D_ubaye`, 93 % des 3022 événements communs avec le run SeisComP
-`1D_ubaye_v2` ont exactement la même position ; les écarts concernent
-surtout les événements pointés sur des stations à plus de 50 km.
+jour avec la configuration du profil sur le serveur : c'est ce que garantit
+`profil_vers_seiscomp.py`, qui installe le profil local tel quel (voir
+[Installer un profil dans SeisComP](#installer-un-profil-dans-seiscomp--profil_vers_seiscomppy)).
 
 ## Pointés SeisComP : `fetch_picks.py`
 
