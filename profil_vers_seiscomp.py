@@ -207,8 +207,12 @@ def scrtdd_cfg(profil, block):
     ]) + block
 
 
-def scolv_cfg(profil, nllroot, block):
-    """scolv-NLL.cfg d'une première installation : plugin, chemins, un profil."""
+def scolv_cfg(profil, nllroot, block, pick_error):
+    """
+    scolv-NLL.cfg d'une première installation : plugin, chemins, incertitude
+    des pointés qui n'en ont pas (celle de nll_run.py, phases.default_error_s ;
+    0,5 s par défaut dans le plugin), un profil.
+    """
     return "\n".join([
         "# Configuration du plugin NonLinLoc (locnll) pour scolv, écrite par",
         "# profil_vers_seiscomp.py (NonLinLoc_ToolBox). Ajoutée à une copie de",
@@ -216,6 +220,8 @@ def scolv_cfg(profil, nllroot, block):
         "plugins = ${plugins}, locnll",
         f"NLLROOT = {nllroot}",
         "NonLinLoc.outputPath = ${NLLROOT}/output/",
+        "# Incertitude (s) des pointés sans incertitude, comme en local",
+        f"NonLinLoc.defaultPickError = {pick_error:g}",
         "",
         "# Profils disponibles (ordre = priorité pour une recherche automatique)",
         f"NonLinLoc.profiles = {profil}",
@@ -355,7 +361,8 @@ def main():
     region = locgrid_region(lines)
     block = profile_block(args.profil, grid_root.name, region)
     (out_dir / f"locnll_{args.profil}.cfg").write_text(block)
-    (out_dir / "scolv-NLL.cfg").write_text(scolv_cfg(args.profil, nllroot, block))
+    pick_error = (config["phases"].get("default_error_s") or {}).get("P", 0.02)
+    (out_dir / "scolv-NLL.cfg").write_text(scolv_cfg(args.profil, nllroot, block, pick_error))
     dd_block = scrtdd_block(args.profil, f"{remote_dir}/time/{grid_root.name}", region)
     (out_dir / f"scrtdd_{args.profil}.cfg").write_text(dd_block)
     (out_dir / "scrtdd-NLL.cfg").write_text(scrtdd_cfg(args.profil, dd_block))
