@@ -1,8 +1,10 @@
-# NonLinLoc_ToolBox
+# Loc_ToolBox
 
-Outils pour localiser des séismes avec **NonLinLoc (NLL)** sur son propre
-ordinateur, avec les pointés d'un serveur SeisComP, sans passer par le
-serveur. Trois usages :
+La chaîne de production des localisations : récupérer les pointés d'un
+serveur SeisComP, localiser avec **NonLinLoc (NLL)** sur son propre
+ordinateur, installer un profil dans SeisComP et préparer la double
+différence (scrtdd). L'analyse des résultats est dans un dépôt à part
+(LocQuality_ToolBox, ci-dessous). Quatre usages :
 
 1. **Créer un profil NLL pour une nouvelle région** à partir d'un modèle de
    vitesse 1D ou du modèle 3D (`creer_profil.py`).
@@ -27,6 +29,24 @@ lit directement les dossiers produits ici.
   profil NLL + runs ──► profil_vers_seiscomp.py ──► dossier à copier ──► scolv (SeisComP)
 ```
 
+## Par où commencer
+
+1. **Installer** les outils et NonLinLoc, puis faire le **premier essai sur
+   le Jura** (sections [Installation](#installation) et
+   [Premier essai](#premier-essai--le-jura-en-10-minutes), une dizaine de
+   minutes).
+2. **Comprendre ce que font les outils** : le PDF *Mise en place NLL sur
+   SeisComP* (`docs/`) explique les concepts, les paramètres ligne par ligne
+   et l'installation sur OAR. Les commandes, elles, sont dans ce README.
+3. **Votre région** : choisir la zone, créer le profil, lancer un run
+   ([Créer un profil](#créer-un-profil-pour-une-nouvelle-région),
+   [Lancer un run](#lancer-un-run--nll_runpy)).
+4. **Analyser la qualité** des localisations avec
+   [LocQuality_ToolBox](https://github.com/LuDesmeuzes/LocQuality_ToolBox).
+5. **Installer le profil sur OAR**, puis préparer **scrtdd**
+   ([Installer un profil dans SeisComP](#installer-un-profil-dans-seiscomp--profil_vers_seiscomppy),
+   [Relocaliser avec scrtdd](#relocaliser-avec-scrtdd-sur-le-serveur)).
+
 ## Prérequis
 
 - macOS ou Linux, Python 3.9 ou plus récent, `git`, un compilateur C et
@@ -42,11 +62,11 @@ lit directement les dossiers produits ici.
 
 ## Installation
 
-### 1. NonLinLoc_ToolBox
+### 1. Loc_ToolBox
 
 ```bash
-git clone https://github.com/LuDesmeuzes/NonLinLoc.git NonLinLoc_ToolBox
-cd NonLinLoc_ToolBox
+git clone https://github.com/LuDesmeuzes/Loc_ToolBox.git
+cd Loc_ToolBox
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -119,7 +139,7 @@ Contenu du dossier de travail :
 
 L'exemple crée un profil 1D pour le Jura, puis localise les 25 séismes de
 mars 2024. Il faut l'accès au serveur fdsnws du Jura. Depuis le dossier
-`NonLinLoc_ToolBox`, environnement activé :
+`Loc_ToolBox`, environnement activé :
 
 1. Créer le profil et la configuration de la région (≈ 15 s, topographie
    comprise) :
@@ -386,12 +406,18 @@ l'instance OAR de chacun :
   SeisComP (plugin `tttnll`, fourni avec scrtdd, interface `NLLGrid`), et
   un profil scrtdd du même nom s'en sert.
 
-NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local. Le script ne se connecte à rien et n'écrit rien en base : il
+NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local.
+Le dossier permet aussi de relocaliser avec screloc toute la période des
+runs du profil, à partir des mêmes origines et des mêmes pointés que
+`nll_run.py`, pour comparer le serveur au local. Le script ne se connecte à rien et n'écrit rien en base : il
 remplit un dossier, et `INSTALLER.txt` donne les commandes à copier.
 
 ```bash
-python profil_vers_seiscomp.py --profil 05_ubaye_1D_topo
+python profil_vers_seiscomp.py --config <config de la région> --profil 05_ubaye_1D_topo
 ```
+
+La configuration de la région (celle passée à `nll_run.py`) donne le cache
+des XML journaliers des pointés ; sans elle, ce sont ceux de `config.yaml`.
 
 | Option | Ce que c'est | Défaut |
 | --- | --- | --- |
@@ -414,12 +440,24 @@ dossier `<racine>/export_seiscomp/<profil>/` contient :
 | `locnll_<profil>.cfg` | Les seules lignes du profil (`earthModelID`, `tablePath`, `controlFile`, `stationNameFormat`, `region`), à ajouter à un `scolv-NLL.cfg` existant |
 | `scrtdd-NLL.cfg` | Pour scrtdd, première installation : plugin `tttnll`, `ttt.NLLGrid.tables`, la table du profil et le profil scrtdd |
 | `scrtdd_<profil>.cfg` | La table (`ttt.NLLGrid.<profil>.tablePath`) et le profil scrtdd seuls (`tableType = NLLGrid`, `tableModel`, `region`), à ajouter à une configuration scrtdd qui a déjà `tttnll` |
+| `screloc.cfg` | Configuration de screloc : plugin et profil, `reloc.locator = NonLinLoc`, `reloc.allowManualOrigins = true` (les origines de départ sont les LOCSAT manuelles) |
+| `screloc/entree/` | XML journaliers des périodes des runs, copiés du cache de `fetch_picks.py` |
 | `INSTALLER.txt` | Commandes à copier, dans l'ordre |
 
 La configuration va dans `~/.seiscomp/scolv-NLL.cfg`, une copie de
 `scolv-PROD.cfg` : la configuration habituelle de scolv reste intacte, et
 on lance `./LaunchScolv.bash NLL` pour localiser avec NonLinLoc. `region`
 est le rectangle de la grille de recherche (`LOCGRID`).
+
+`NonLinLoc.defaultPickError` y vaut `phases.default_error_s` (0,02 s,
+comme en local ; le plugin prend 0,5 s par défaut). screloc se lance par
+`seiscomp exec screloc … --ep <jour>.xml`, sans quoi le plugin `locnll`
+peut être introuvable ; il n'écrit rien en base, seulement du XML, qui
+contient les origines de départ et les relocalisées (suffixe `.nll`).
+screloc utilise aussi les arrivées désactivées par l'analyste
+(`timeUsed = false`), que `nll_run.py` écarte : c'est la principale cause
+d'écart entre les deux (validé sur novembre 2024, profil 1D de l'Ubaye :
+98 % des positions identiques à 10 m près à phases égales).
 
 Côté scrtdd, les lignes vont dans `~/.seiscomp/scrtdd.cfg`. Le profil
 scrtdd ne règle que la table de temps et la région : le reste garde les
@@ -609,9 +647,15 @@ dans `nll_common.py`.
 
 ## Documentation
 
-- `docs/Mise en place NLL sur Seiscomp.pdf` : tutoriel du pipeline NonLinLoc
-  complet — concepts (`TRANS`, modèle 1D vs 3D, grilles `VGGRID`/`LOCGRID`),
-  grilles de temps, puis mise en place de NLL sur SeisComP.
+Ce README est la référence des outils (commandes, options, fichiers
+produits) : c'est lui qu'on met à jour avec le code.
+
+- `docs/Mise en place NLL sur Seiscomp.pdf` : les concepts, qui ne changent
+  pas avec le code — `TRANS`, modèle 1D vs 3D, grilles `VGGRID`/`LOCGRID`,
+  ce que fait l'installation d'un profil sur OAR (scolv, screloc, scrtdd),
+  explication ligne par ligne des paramètres (`vel2grid.in`, `grid2time.in`,
+  `NLL.<profil>.conf`), et la voie manuelle avec les programmes de NonLinLoc.
+  Les commandes y renvoient à ce README.
 - `docs/vel2grid_grid2time.in.example` : fichier Vel2Grid + Grid2Time
   commenté pour un modèle 1D, pour comprendre ce qu'écrit
   `creer_profil.py` ou le faire à la main.
@@ -640,7 +684,7 @@ et la préparation de scrtdd (fenêtres de formes d'onde, routage).
 ## Structure des fichiers
 
 ```
-NonLinLoc_ToolBox/
+Loc_ToolBox/
 ├── README.md                  ← ce fichier
 ├── requirements.txt           ← dépendances Python
 ├── config.example.yaml        ← configuration par défaut, chaque clé documentée (versionné)
