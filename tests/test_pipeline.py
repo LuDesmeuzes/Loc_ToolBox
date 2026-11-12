@@ -576,3 +576,21 @@ def test_profil_vers_seiscomp(tmp_path):
     block = scrtdd_block("p1", "/home/u/nll/p1/time/layer", locgrid_region(lines))
     assert "ttt.NLLGrid.p1.tablePath = /home/u/nll/p1/time/layer" in block
     assert "profile.p1.tableType = NLLGrid" in block and "profile.p1.tableModel = p1" in block
+
+
+def test_profil_vers_seiscomp_xml_screloc(tmp_path):
+    from profil_vers_seiscomp import copy_day_xml, run_days, screloc_cfg
+    run = tmp_path / "r1"
+    run.mkdir()
+    (run / "run.yaml").write_text("profil: p1\ndebut: '2024-11-29'\nfin: '2024-12-01'\n")
+    days = run_days([run])
+    assert [d.isoformat() for d in days] == ["2024-11-29", "2024-11-30", "2024-12-01"]
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    for day in ("2024-11-29", "2024-12-01"):
+        (cache / f"{day}.xml").write_text('<event publicID="a"/><event publicID="b"/>')
+    n_events, absent = copy_day_xml(cache, days, tmp_path / "entree")
+    assert n_events == 4 and [d.isoformat() for d in absent] == ["2024-11-30"]
+    cfg = screloc_cfg("p1", "/home/u/nll", "NonLinLoc.profile.p1.earthModelID = p1\n", 0.02)
+    assert "reloc.allowManualOrigins = true" in cfg and "NonLinLoc.defaultPickError = 0.02" in cfg
+    assert "reloc.profile = p1" in cfg and "pour screloc" in cfg
