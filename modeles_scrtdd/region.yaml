@@ -1,0 +1,43 @@
+# Modèle d'essai scrtdd : région étendue (Jura, ~160 km), plusieurs essaims.
+#
+# Même usage que essaim.yaml (--modele region, --set clé=valeur). Ne diffère
+# que par l'inversion : avec les réglages d'un essaim, le gros cluster du
+# Jura ne converge pas et 44 événements bougent de plus de 5 km en vertical.
+# Valeurs du Jura v4, à confirmer (essai v5).
+
+description: Région étendue, inversion plus contrainte (Jura v4, à confirmer)
+
+entrees:
+  rms_max: 0.5
+  phases_min: 8
+
+profil:
+  P-Phases: [P, Pg]
+  S-Phases: [S, Sg]
+  PSTableOnly: true
+
+  doubleDifferenceSystem.eventFiltering.minNumPhases: 8
+  doubleDifferenceSystem.eventFiltering.minNumNeighbours: 4
+  doubleDifferenceSystem.phaseFiltering.minStationToEventPairDistRatio: 3
+  doubleDifferenceSystem.eventPairSelection.multiEvent.maxNumNeighbours: 40
+  doubleDifferenceSystem.eventPairSelection.multiEvent.maxNeighbourDistance: 5
+  doubleDifferenceSystem.eventPairSelection.multiEvent.numEllipsoids: 0
+
+  crossCorrelation.enable: true
+  crossCorrelation.maxStationDistance: 60
+  crossCorrelation.maxInterEventDistance: 3
+  crossCorrelation.p-phase.minCCCoef: 0.7
+  crossCorrelation.s-phase.minCCCoef: 0.7
+  crossCorrelation.p-phase.components: [Z]
+  crossCorrelation.s-phase.components: [L2]
+  crossCorrelation.waveformFiltering.filterString: ITAPER(1)>>BW_HLP(2,1,20)
+
+  solver.solverType: LSMR
+  solver.algoIterations: 20
+  solver.downWeightingByResidual: [10, 5]
+  # Amortissement et contrainte absolue plus forts que pour un essaim
+  # (0,01 et 0,3) : les profondeurs ne dérivent plus (Jura v4)
+  solver.dampingFactor: 0.1
+  solver.absoluteLocationConstraint: 1.0
+  solver.xcorrWeightScaler: 2.0
+  solver.usePickUncertainties: false
