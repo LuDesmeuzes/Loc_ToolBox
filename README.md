@@ -331,8 +331,8 @@ période, avec un profil, sans passer par le serveur :
 
 ```bash
 python nll_run.py --config <config de la région> --profil <profil> \
-    --debut 2024-11-01 --fin 2024-11-30 --grilles
-python nll_run.py --config <config> --profil <profil> --debut … --fin … \
+    --debut AAAA-MM-JJ --fin AAAA-MM-JJ --grilles
+python nll_run.py --config <config> --profil <profil> --debut AAAA-MM-JJ --fin AAAA-MM-JJ \
     --nom <profil>_oct15 --locsearch "OCT 15 15 15 0.001 50000 5000 0 1"
 ```
 
@@ -378,7 +378,7 @@ au format `NLLOC_OBS`. `nll_run.py` l'appelle tout seul ; on peut aussi le
 lancer à part :
 
 ```bash
-python fetch_picks.py --config <config de la région> --debut 2024-11-01 --fin 2024-11-30
+python fetch_picks.py --config <config de la région> --debut AAAA-MM-JJ --fin AAAA-MM-JJ
 ```
 
 Une requête par jour ; chaque journée est gardée dans `fetch.cache_dir` et
@@ -489,7 +489,7 @@ et table de temps du profil dans `~/.seiscomp/scrtdd.cfg`).
 
 ```bash
 python scrtdd_inputs.py --config <config de la région> --run <run> --essai <essai>
-python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --debut 2024-12-01 --fin 2025-02-28
+python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --debut AAAA-MM-JJ --fin AAAA-MM-JJ
 python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --modele region
 python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
 ```
