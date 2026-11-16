@@ -383,8 +383,8 @@ def parse_args():
                         help="Run dont prendre les stations (répétable ; défaut : tous les runs du profil)")
     parser.add_argument("--utilisateur", default=getpass.getuser(),
                         help="Identifiant sur la machine SeisComP (défaut : celui de cette machine)")
-    parser.add_argument("--hote", default="ist-oar",
-                        help="Machine SeisComP (défaut : ist-oar)")
+    parser.add_argument("--hote", default="ist-oar.u-ga.fr",
+                        help="Machine SeisComP (défaut : ist-oar.u-ga.fr)")
     parser.add_argument("--nllroot",
                         help="Dossier des profils sur la machine SeisComP "
                              "(défaut : /home/<utilisateur>/.seiscomp/nll)")

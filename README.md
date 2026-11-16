@@ -432,7 +432,7 @@ des XML journaliers des pointés ; sans elle, ce sont ceux de `config.yaml`.
 | `--profil` | Profil à installer (dossier de `<profils_dir>`) | obligatoire |
 | `--run` | Run dont prendre les stations, répétable | tous les runs du profil |
 | `--utilisateur` | Identifiant sur la machine SeisComP | celui de l'ordinateur |
-| `--hote` | Machine SeisComP | `ist-oar` |
+| `--hote` | Machine SeisComP | `ist-oar.u-ga.fr` |
 | `--nllroot` | Dossier des profils sur la machine SeisComP | `/home/<utilisateur>/.seiscomp/nll` |
 
 Seules les grilles des stations pointées dans les runs du profil sont

@@ -432,7 +432,7 @@ def parse_args():
                         help="Formes d'onde : secondes après le dernier pointé (défaut : 40)")
     parser.add_argument("--utilisateur", default=getpass.getuser(),
                         help="Identifiant sur la machine SeisComP (défaut : celui de cette machine)")
-    parser.add_argument("--hote", default="ist-oar", help="Machine SeisComP (défaut : ist-oar)")
+    parser.add_argument("--hote", default="ist-oar.u-ga.fr", help="Machine SeisComP (défaut : ist-oar.u-ga.fr)")
     parser.add_argument("--dossier-distant",
                         help="Dossier des essais sur la machine SeisComP "
                              "(défaut : /home/<utilisateur>/scrtdd ; l'essai va dans <run>/<essai>/)")
