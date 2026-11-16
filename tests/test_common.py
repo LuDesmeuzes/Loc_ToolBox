@@ -140,4 +140,4 @@ def test_load_config_without_config_yaml_uses_example():
     if (TOOLBOX_DIR / "config.yaml").exists():
         pytest.skip("config.yaml présent sur cette machine")
     config = load_config(TOOLBOX_DIR / "config.yaml")
-    assert config["run"]["profils_dir"] == str(TOOLBOX_DIR.parent / "NonLinLoc_travail" / "profils")
+    assert config["run"]["profils_dir"] == str(TOOLBOX_DIR.parent / "Loc_ToolBox_travail" / "profils")

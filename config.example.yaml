@@ -13,7 +13,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Dossier de travail : profils, runs, pointés, modèles. Absent → le dossier
-# NonLinLoc_travail/ à côté de ce dépôt (créé au besoin). Exemple :
+# Loc_ToolBox_travail/ à côté de ce dépôt (créé au besoin). Exemple :
 # racine: ~/Documents/Boulot/Localisation
 
 # Dossier des programmes NonLinLoc, s'ils ne sont ni dans <racine>/bin ni

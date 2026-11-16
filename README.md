@@ -78,7 +78,7 @@ pytest tests/
 
 Le dépôt peut être placé n'importe où. Le travail (profils, runs, pointés)
 va dans un **dossier de travail** à part, `racine`. Par défaut, c'est
-`NonLinLoc_travail/` **à côté** du dépôt, créé au besoin. Il survit donc à
+`Loc_ToolBox_travail/` **à côté** du dépôt, créé au besoin. Il survit donc à
 un nouveau clone du dépôt.
 
 ### 2. NonLinLoc
@@ -114,7 +114,7 @@ puis modifier dans `config.yaml` :
 
 | Clé | Contenu |
 | --- | --- |
-| `racine` | Dossier de travail (défaut : `NonLinLoc_travail/` à côté du dépôt) |
+| `racine` | Dossier de travail (défaut : `Loc_ToolBox_travail/` à côté du dépôt) |
 | `nll_bin` | Dossier des programmes NonLinLoc, s'ils ne sont ni dans `<racine>/bin/` ni dans le PATH |
 | `paths.model_file` | Modèle 3D global (pour `--modele-3d` seulement) |
 
@@ -155,7 +155,7 @@ python creer_profil.py --region exemple_jura --nom exemple_jura_1D \
    NLLoc). Le plus simple est de copier la commande que l'étape 1 affiche
    sous « Étape suivante », avec le vrai chemin, en remplaçant les
    `AAAA-MM-JJ` par les dates. Écrite à la main, `<racine>` est le dossier
-   de travail (par défaut `NonLinLoc_travail/`, à côté du dépôt) :
+   de travail (par défaut `Loc_ToolBox_travail/`, à côté du dépôt) :
 
 ```bash
 python nll_run.py --config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml \

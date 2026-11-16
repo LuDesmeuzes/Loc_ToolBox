@@ -31,7 +31,7 @@ TOOLBOX_DIR = Path(__file__).resolve().parent
 
 # Dossier de travail par défaut : à côté du dépôt, pour qu'un nouveau clone ou
 # une suppression du dépôt n'emporte pas les grilles et les runs.
-DEFAULT_ROOT = TOOLBOX_DIR.parent / "NonLinLoc_travail"
+DEFAULT_ROOT = TOOLBOX_DIR.parent / "Loc_ToolBox_travail"
 
 # Chemins de la configuration, relatifs à `racine` quand ils ne sont pas
 # absolus, avec leur valeur par défaut quand ils sont absents.
@@ -84,7 +84,7 @@ def load_config(config_path):
     Charge un fichier de configuration YAML et complète ses chemins.
 
     Tous les chemins sont relatifs au dossier `racine` (défaut :
-    NonLinLoc_travail/ à côté du dépôt), sauf s'ils sont absolus ; ceux qui
+    Loc_ToolBox_travail/ à côté du dépôt), sauf s'ils sont absolus ; ceux qui
     manquent prennent leur valeur par défaut (PATH_DEFAULTS ; run.regions_dir :
     profils_travail/ à côté de run.profils_dir). run.nlloc
     reçoit le chemin de NLLoc trouvé par find_nll() (None si introuvable :
