@@ -290,7 +290,7 @@ procurer). `--modele-3d` sans valeur prend `paths.model_file` de
 ```bash
 python creer_profil.py --region montblanc --nom 1_montblanc_3D_topo --modele-3d \
     --lat 45.72 45.95 --lon 6.70 7.03 --pas 1 \
-    --fdsnws http://ist-sc3-sig.u-ga.fr:8080/fdsnws
+    --fdsnws http://ist-scprod-sig.u-ga.fr:8080/fdsnws
 ```
 
 Le script découpe une **tuile** du modèle autour de la zone, la convertit au

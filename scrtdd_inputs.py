@@ -127,8 +127,13 @@ def station_inventory(url, stations, debut, fin):
     params = {"station": ",".join(sorted({s for _, s in stations})), "level": "station",
               "format": "text", "starttime": debut.isoformat(),
               "endtime": (fin + timedelta(days=1)).isoformat()}
-    with urllib.request.urlopen(f"{url}?{urllib.parse.urlencode(params)}", timeout=120) as resp:
-        text = resp.read().decode() if resp.status != 204 else ""
+    try:
+        with urllib.request.urlopen(f"{url}?{urllib.parse.urlencode(params)}", timeout=120) as resp:
+            text = resp.read().decode() if resp.status != 204 else ""
+    except urllib.error.URLError as err:
+        host = urllib.parse.urlparse(url).netloc
+        raise SystemExit(f"Inventaire des stations inaccessible ({host} : {err.reason}). "
+                         "Se connecter au réseau du laboratoire ou au VPN, puis relancer.")
     if not text.strip():
         return {}
     inv = pd.read_csv(io.StringIO(text), sep="|")
