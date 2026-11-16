@@ -413,8 +413,13 @@ runs du profil, à partir des mêmes origines et des mêmes pointés que
 remplit un dossier, et `INSTALLER.txt` donne les commandes à copier.
 
 ```bash
-python profil_vers_seiscomp.py --config <config de la région> --profil 05_ubaye_1D_topo
+python profil_vers_seiscomp.py --config <config de la région> --profil <profil>
 ```
+
+Par exemple, pour le profil du premier essai :
+`--config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml --profil exemple_jura_1D`.
+Pour l'essayer dans scolv (étape 4 d'`INSTALLER.txt`), il faut des
+événements de la région du profil dans la base qu'ouvre scolv.
 
 La configuration de la région (celle passée à `nll_run.py`) donne le cache
 des XML journaliers des pointés ; sans elle, ce sont ceux de `config.yaml`.
@@ -483,10 +488,17 @@ Prérequis, une fois par profil NLL : le profil installé avec
 et table de temps du profil dans `~/.seiscomp/scrtdd.cfg`).
 
 ```bash
-python scrtdd_inputs.py --config <config de la région> --run 05_ubaye_1D_topo_20230514_20250630 --essai ubaye_dec24 --debut 2024-12-01 --fin 2025-02-28
-python scrtdd_inputs.py --config <config> --run <run> --essai jura_v5 --modele region
-python scrtdd_inputs.py --config <config> --run <run> --essai ubaye_dec24_amorti --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
+python scrtdd_inputs.py --config <config de la région> --run <run> --essai <essai>
+python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --debut 2024-12-01 --fin 2025-02-28
+python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --modele region
+python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
 ```
+
+`<run>` est le nom d'un run de `nll_run.py` (dossier de `<racine>/runs/`,
+ex. `exemple_jura_1D_20240301_20240331`) ; son profil doit être installé
+(prérequis ci-dessus). `<essai>` est un nom libre (lettres, chiffres, `_`),
+par exemple `jura_mars24`. Par défaut, tout le run ; `--debut` / `--fin`
+n'en gardent qu'une partie.
 
 ### Réglages : modèles d'essai et `--set`
 
