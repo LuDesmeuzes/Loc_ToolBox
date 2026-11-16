@@ -41,10 +41,10 @@ Configuration (sections run, fetch et phases de config.yaml) :
   fetch.fdsnws_station_url : service fdsnws-station (positions des stations)
 
 Utilisation :
-    python nll_run.py --profil 1D_ubaye --debut 2024-11-01 --fin 2024-11-30
-    python nll_run.py --profil 05_ubaye_3D_topo --debut 2024-11-01 --fin 2024-11-30 --grilles
-    python nll_run.py --profil 1D_ubaye --debut 2024-11-01 --fin 2024-11-30 \\
-        --nom 1D_ubaye_local_test --jobs 6 \\
+    python nll_run.py --config <config de la région> --profil <profil> \\
+        --debut AAAA-MM-JJ --fin AAAA-MM-JJ --grilles
+    python nll_run.py --config <config de la région> --profil <profil> \\
+        --debut AAAA-MM-JJ --fin AAAA-MM-JJ --nom <profil>_oct15 --jobs 6 \\
         --locsearch "OCT 15 15 15 0.001 50000 5000 0 1"
 """
 
@@ -488,6 +488,10 @@ def main():
     (run_dir / "run.yaml").write_text(yaml.safe_dump(meta, allow_unicode=True, sort_keys=False))
     log(f"→ {run_dir / f'{name}.hyp'}", 1)
     log("Terminé.")
+    default_cfg = Path(__file__).resolve().parent / "config.yaml"
+    cfg_opt = "" if Path(args.config).resolve() == default_cfg else f"--config {args.config} "
+    log("Étape suivante (installer le profil dans SeisComP) :")
+    log(f"python profil_vers_seiscomp.py {cfg_opt}--profil {args.profil}", 1)
 
 
 if __name__ == "__main__":

@@ -357,6 +357,9 @@ python nll_run.py --config <config> --profil <profil> --debut AAAA-MM-JJ --fin A
    `<profil>_<début>_<fin>`) : `<nom>.hyp`, `evenements.csv`, `phases.csv`
    et `run.yaml`. LocQuality_ToolBox lit ce dossier directement
    (`paths.nll_runs`).
+6. En fin de run, `nll_run.py` affiche la commande `profil_vers_seiscomp.py`
+   à copier pour installer le profil dans SeisComP (même `--config`, même
+   `--profil`).
 
 Les stations pointées sans grille de temps sont signalées : NLLoc ignore
 leurs phases. Avec `--grilles`, ce sont les stations absentes de

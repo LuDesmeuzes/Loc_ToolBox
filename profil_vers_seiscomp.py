@@ -51,11 +51,10 @@ Sorties (dans <racine>/export_seiscomp/<profil>/, à copier dans
 Le script ne se connecte pas au serveur et n'écrit rien en base.
 
 Utilisation :
-    python profil_vers_seiscomp.py --profil 05_ubaye_1D_topo
-    python profil_vers_seiscomp.py --config ../../profils_travail/ubaye/config_ubaye.yaml \\
-        --profil 05_ubaye_1D_topo_v2
-    python profil_vers_seiscomp.py --profil 1_jura_1D_topo \\
-        --run 1_jura_1D_topo_20180101_20251231
+    python profil_vers_seiscomp.py --profil exemple_jura_1D
+    python profil_vers_seiscomp.py --config <config de la région> --profil <profil>
+    python profil_vers_seiscomp.py --config <config de la région> --profil <profil> \\
+        --run <run>
 """
 
 import argparse
@@ -377,7 +376,7 @@ rsync -avz {login}:{dd}/sortie/ {runs_dir}/screloc_{profil}/
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Prépare un profil local pour SeisComP (scolv, screloc, scrtdd).",
-        epilog="Exemple : python profil_vers_seiscomp.py --profil 05_ubaye_1D_topo",
+        epilog="Exemple : python profil_vers_seiscomp.py --profil exemple_jura_1D",
     )
     parser.add_argument("--profil", required=True, help="Nom du profil (dossier de run.profils_dir)")
     parser.add_argument("--run", action="append", metavar="NOM",
