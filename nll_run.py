@@ -490,8 +490,11 @@ def main():
     log("Terminé.")
     default_cfg = Path(__file__).resolve().parent / "config.yaml"
     cfg_opt = "" if Path(args.config).resolve() == default_cfg else f"--config {args.config} "
-    log("Étape suivante (installer le profil dans SeisComP) :")
-    log(f"python profil_vers_seiscomp.py {cfg_opt}--profil {args.profil}", 1)
+    log("Étapes suivantes :")
+    log("1. Installer le profil dans SeisComP (une fois par profil) :", 1)
+    log(f"python profil_vers_seiscomp.py {cfg_opt}--profil {args.profil}", 2)
+    log("2. Préparer un essai scrtdd sur ce run (--essai : nom libre) :", 1)
+    log(f"python scrtdd_inputs.py {cfg_opt}--run {name} --essai essai1", 2)
 
 
 if __name__ == "__main__":

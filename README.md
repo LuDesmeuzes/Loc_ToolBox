@@ -332,9 +332,15 @@ période, avec un profil, sans passer par le serveur :
 ```bash
 python nll_run.py --config <config de la région> --profil <profil> \
     --debut AAAA-MM-JJ --fin AAAA-MM-JJ --grilles
-python nll_run.py --config <config> --profil <profil> --debut AAAA-MM-JJ --fin AAAA-MM-JJ \
-    --nom <profil>_oct15 --locsearch "OCT 15 15 15 0.001 50000 5000 0 1"
 ```
+
+Options, à ajouter si besoin (elles se combinent) :
+- `--grilles` : calculer les grilles de temps manquantes (point 3) ;
+- `--nom <nom>` : nommer le run autrement que `<profil>_<début>_<fin>` ;
+- `--locsearch "OCT 15 15 15 0.001 50000 5000 0 1"` : remplacer le
+  `LOCSEARCH` du profil, pour un test ;
+- `--jobs N` : nombre de morceaux en parallèle ;
+- `--force` : écraser un run du même nom.
 
 1. Les pointés de la période sont récupérés par `fetch_picks.py`
    (ci-dessous), avec un cache par jour.
@@ -357,9 +363,10 @@ python nll_run.py --config <config> --profil <profil> --debut AAAA-MM-JJ --fin A
    `<profil>_<début>_<fin>`) : `<nom>.hyp`, `evenements.csv`, `phases.csv`
    et `run.yaml`. LocQuality_ToolBox lit ce dossier directement
    (`paths.nll_runs`).
-6. En fin de run, `nll_run.py` affiche la commande `profil_vers_seiscomp.py`
-   à copier pour installer le profil dans SeisComP (même `--config`, même
-   `--profil`).
+6. En fin de run, `nll_run.py` affiche les deux commandes suivantes, à
+   copier : `profil_vers_seiscomp.py` pour installer le profil dans SeisComP
+   (une fois par profil), puis `scrtdd_inputs.py` pour préparer un essai
+   scrtdd sur ce run (nom d'essai `essai1` à changer à volonté).
 
 Les stations pointées sans grille de temps sont signalées : NLLoc ignore
 leurs phases. Avec `--grilles`, ce sont les stations absentes de
@@ -490,18 +497,36 @@ Prérequis, une fois par profil NLL : le profil installé avec
 `profil_vers_seiscomp.py` (étape 5 de son `INSTALLER.txt` : plugin `tttnll`
 et table de temps du profil dans `~/.seiscomp/scrtdd.cfg`).
 
+Le déroulé tient en deux temps : **une** commande `scrtdd_inputs.py` en
+local, qui prépare l'essai, puis les commandes de son `LANCER.txt`, dans
+l'ordre, sur la machine SeisComP. La commande de base est affichée à la fin
+de chaque `nll_run.py` :
+
 ```bash
 python scrtdd_inputs.py --config <config de la région> --run <run> --essai <essai>
-python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --debut AAAA-MM-JJ --fin AAAA-MM-JJ
-python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --modele region
-python scrtdd_inputs.py --config <config> --run <run> --essai <essai> --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
 ```
 
 `<run>` est le nom d'un run de `nll_run.py` (dossier de `<racine>/runs/`,
 ex. `exemple_jura_1D_20240301_20240331`) ; son profil doit être installé
 (prérequis ci-dessus). `<essai>` est un nom libre (lettres, chiffres, `_`),
-par exemple `jura_mars24`. Par défaut, tout le run ; `--debut` / `--fin`
-n'en gardent qu'une partie.
+par exemple `jura_mars24`.
+
+Options, à ajouter si besoin (elles se combinent) :
+- `--debut AAAA-MM-JJ --fin AAAA-MM-JJ` : ne garder qu'une partie du run
+  (par défaut, tout le run) ;
+- `--modele region` : réglages pour une région étendue (défaut : `essaim`,
+  voir ci-dessous) ;
+- `--set <nom>=<valeur>` : changer une valeur pour cet essai, répétable
+  (ex. `--set solver.dampingFactor=0.05 --set entrees.rms_max=0.3`) ;
+- `--force` : remplacer un essai du même nom.
+
+Par exemple, un essai sur décembre seulement, avec un amortissement plus
+fort :
+
+```bash
+python scrtdd_inputs.py --config <config de la région> --run <run> --essai <essai> \
+    --debut 2024-12-01 --fin 2024-12-31 --set solver.dampingFactor=0.05
+```
 
 ### Réglages : modèles d'essai et `--set`
 
