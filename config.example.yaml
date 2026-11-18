@@ -121,6 +121,11 @@ fetch:
   # stations, utilisées par nll_run.py --grilles)
   fdsnws_station_url: "http://ist-scprod-sig.u-ga.fr:8080/fdsnws/station/1/query"
 
+  # Formes d'onde du même serveur (recordstream SeisComP, service
+  # fdsnws-dataselect), lues par scrtdd pour la corrélation croisée
+  # (scrtdd_inputs.py, -I dans LANCER.txt)
+  recordstream: "fdsnws://ist-scprod-sig.u-ga.fr:8081"
+
   # Zone des événements à récupérer (degrés). Celle-ci couvre les
   # événements du run SeisComP 1D_ubaye_v2.
   zone: {lat_min: 44.40, lat_max: 44.63, lon_min: 6.59, lon_max: 6.92}

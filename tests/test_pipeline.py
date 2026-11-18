@@ -428,6 +428,9 @@ def test_scrtdd_lancer():
                        "/home/u/scrtdd/r1/ubaye_dec24", "/local/r1/scrtdd/ubaye_dec24",
                        "/home/u/sds/r1", "05_ubaye_1D_topo", 33, True)
     assert "--profile ubaye_dec24" in text and "-I sdsarchive:///home/u/sds/r1" in text
+    # Formes d'onde lues sur le serveur par défaut, l'archive dédiée en secours (après)
+    assert text.index('-I "fdsnws://ist-scprod-sig.u-ga.fr:8081"') < text.index("telecharger_formes_onde")
+    assert 'BASE=$(' in text and text.index("BASE=$(") < text.index("seiscomp exec scrtdd")
     assert 'grep -c "^profile.ubaye_dec24\\." ~/.seiscomp/scrtdd.cfg' in text
     assert "rsync -avz --exclude mseed/ u@ist-oar:/home/u/scrtdd/r1/ubaye_dec24/ " in text
     # Commandes à copier : pas de commentaire # (zsh) ni de repère <…>
@@ -436,6 +439,9 @@ def test_scrtdd_lancer():
     sans_cc = lancer_text("e", "r1", date(2024, 12, 1), date(2025, 2, 28), "essaim", [], counts,
                           "u@h", "/r", "/l", "/a", "p", 3, False)
     assert "sdsarchive" not in sans_cc and "telecharger_formes_onde" not in sans_cc
+    autre = lancer_text("e", "r1", date(2024, 12, 1), date(2025, 2, 28), "essaim", [], counts,
+                        "u@h", "/r", "/l", "/a", "p", 3, True, "fdsnws://autre:8081")
+    assert '-I "fdsnws://autre:8081"' in autre and "ist-scprod" not in autre
 
 
 def test_scrtdd_reference_positions(tmp_path):

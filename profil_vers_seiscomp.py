@@ -8,7 +8,7 @@ configuration pour :
   - le localisateur NonLinLoc (plugin locnll, dans scolv) ;
   - scrtdd : les grilles sont déclarées comme table de temps de trajet
     SeisComP (plugin tttnll de scrtdd, interface NLLGrid), au nom du profil.
-    Les profils scrtdd qui l'utilisent viennent de chaque essai
+    Les profils scrtdd qui l'utilisent viennent de chaque relocalisation
     (scrtdd_inputs.py).
 
 NLL et scrtdd lisent ainsi les mêmes grilles, celles calculées en local,
@@ -227,7 +227,7 @@ def scrtdd_block(profil, table_path):
     """
     Table NLLGrid du profil (chemin complet des grilles). Les profils scrtdd
     qui l'utilisent (tableModel = <profil>) sont écrits par scrtdd_inputs.py,
-    un par essai.
+    un par relocalisation.
     """
     return f"ttt.NLLGrid.{profil}.tablePath = {table_path}\n"
 
@@ -237,7 +237,7 @@ def scrtdd_cfg(profil, block):
     return "\n".join([
         "# Grilles NLL comme table de temps de trajet SeisComP (plugin tttnll de",
         "# scrtdd), écrites par profil_vers_seiscomp.py (Loc_ToolBox). Les",
-        "# profils scrtdd viennent des essais (scrtdd_inputs.py, LANCER.txt).",
+        "# profils scrtdd viennent des relocalisations (scrtdd_inputs.py, LANCER.txt).",
         "plugins = ${plugins}, tttnll",
         f"ttt.NLLGrid.tables = {profil}",
         "",
@@ -325,6 +325,14 @@ grep "^NonLinLoc.profiles" ~/.seiscomp/scolv-NLL.cfg
 
 seiscomp exec bash -c 'ls $SEISCOMP_ROOT/share/plugins' | grep tttnll
 
+   Dossier de cache de scrtdd (formes d'onde), une fois par machine : par
+   défaut, scrtdd l'écrit dans l'installation de SeisComP, souvent en
+   lecture seule (« cacheDirectory: failed to create path »).
+
+mkdir -p ~/scrtdd/cache
+grep -q "^performance.cacheDirectory" ~/.seiscomp/scrtdd.cfg || echo "performance.cacheDirectory = $HOME/scrtdd/cache" >> ~/.seiscomp/scrtdd.cfg
+grep "^performance.cacheDirectory" ~/.seiscomp/scrtdd.cfg
+
    Première installation (pas encore de tttnll dans ~/.seiscomp/scrtdd.cfg) :
 
 cat {nllroot}/{profil}/scrtdd-NLL.cfg >> ~/.seiscomp/scrtdd.cfg
@@ -336,8 +344,8 @@ cat {nllroot}/{profil}/scrtdd_{profil}.cfg >> ~/.seiscomp/scrtdd.cfg
 sed -i 's/^ttt.NLLGrid.tables = .*/&, {profil}/' ~/.seiscomp/scrtdd.cfg
 grep "^ttt.NLLGrid.tables" ~/.seiscomp/scrtdd.cfg
 
-   Les profils scrtdd qui utilisent cette table viennent de chaque essai :
-   scrtdd_inputs.py --run <run> --essai <nom> écrit le profil, les entrées
+   Les profils scrtdd qui utilisent cette table viennent de chaque relocalisation :
+   scrtdd_inputs.py --run <run> --reloc <nom> écrit le profil, les entrées
    et les commandes (LANCER.txt).
 
 6. screloc sur toute la période des runs ({n_events} événements), à partir

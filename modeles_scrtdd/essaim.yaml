@@ -1,12 +1,12 @@
-# Modèle d'essai scrtdd : essaim de quelques kilomètres (Ubaye, Ambert).
+# Modèle de réglages scrtdd : essaim de quelques kilomètres (Ubaye, Ambert).
 #
 # Lu par scrtdd_inputs.py (--modele essaim), qui en tire le profil scrtdd de
-# l'essai (scrtdd_<essai>.cfg) et le recopie, valeurs effectives comprises,
-# dans essai.yaml. Pour changer une valeur sans toucher à ce fichier :
+# la relocalisation (scrtdd_<reloc>.cfg) et le recopie, valeurs effectives comprises,
+# dans reloc.yaml. Pour changer une valeur sans toucher à ce fichier :
 #   --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
 # Pour un jeu de réglages durable : copier ce fichier et passer --modele <copie>.
 #
-# Noms des paramètres : scrtdd 2.x, sans le préfixe profile.<essai>. (ils ont
+# Noms des paramètres : scrtdd 2.x, sans le préfixe profile.<reloc>. (ils ont
 # changé depuis la 1.8 : vérifier dans le log que les valeurs sont prises).
 # « défaut » = valeur par défaut de scrtdd 2.x, écrite ici pour être visible.
 
@@ -21,7 +21,7 @@ entrees:
   # peut former aucun couple : il ne sert qu'à alourdir le calcul.
   phases_min: 8
 
-# Paramètres du profil scrtdd (profile.<essai>.<nom>). La table de temps
+# Paramètres du profil scrtdd (profile.<reloc>.<nom>). La table de temps
 # (NLLGrid, grilles du profil NLL du run) et la région (LOCGRID) sont ajoutées
 # par le script ; tableType / tableModel ici les remplaceraient.
 profil:

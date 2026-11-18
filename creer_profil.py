@@ -398,6 +398,7 @@ def region_config(base, args, regions_dir):
         "fetch": {
             "fdsnws_url": f"{url}/event/1/query",
             "fdsnws_station_url": f"{url}/station/1/query",
+            **({"recordstream": fetch["recordstream"]} if fetch.get("recordstream") else {}),
             "zone": {"lat_min": args.zone[0], "lat_max": args.zone[1],
                      "lon_min": args.zone[2], "lon_max": args.zone[3]},
             "event_types": args.types,

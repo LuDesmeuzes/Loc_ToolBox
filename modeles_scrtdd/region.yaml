@@ -1,9 +1,9 @@
-# Modèle d'essai scrtdd : région étendue (Jura, ~160 km), plusieurs essaims.
+# Modèle de réglages scrtdd : région étendue (Jura, ~160 km), plusieurs essaims.
 #
 # Même usage que essaim.yaml (--modele region, --set clé=valeur). Ne diffère
 # que par l'inversion : avec les réglages d'un essaim, le gros cluster du
 # Jura ne converge pas et 44 événements bougent de plus de 5 km en vertical.
-# Valeurs du Jura v4, à confirmer (essai v5).
+# Valeurs du Jura v4, à confirmer (relocalisation v5).
 
 description: Région étendue, inversion plus contrainte (Jura v4, à confirmer)
 

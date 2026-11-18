@@ -493,8 +493,8 @@ def main():
     log("Étapes suivantes :")
     log("1. Installer le profil dans SeisComP (une fois par profil) :", 1)
     log(f"python profil_vers_seiscomp.py {cfg_opt}--profil {args.profil}", 2)
-    log("2. Préparer un essai scrtdd sur ce run (--essai : nom libre) :", 1)
-    log(f"python scrtdd_inputs.py {cfg_opt}--run {name} --essai essai1", 2)
+    log("2. Préparer une relocalisation scrtdd sur ce run (--reloc : nom libre) :", 1)
+    log(f"python scrtdd_inputs.py {cfg_opt}--run {name} --reloc reloc1", 2)
 
 
 if __name__ == "__main__":

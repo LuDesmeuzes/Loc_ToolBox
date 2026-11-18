@@ -1,9 +1,9 @@
 """
 scrtdd_inputs.py
 ================
-Prépare un essai scrtdd (relocalisation double différence) à partir d'un
+Prépare une relocalisation scrtdd (double différence) à partir d'un
 run NLL local (nll_run.py) : les entrées de scrtdd, le profil scrtdd de
-l'essai et les commandes pour le lancer sur la machine SeisComP. Les
+la relocalisation et les commandes pour le lancer sur la machine SeisComP. Les
 positions de départ sont les localisations du run, les pointés ceux des XML
 SeisComP téléchargés pour le run (cache de fetch_picks.py).
 
@@ -12,11 +12,11 @@ scrtdd lit les trois CSV à la place d'une liste d'origines de la base
 localisations qui n'existent qu'en local, avec les mêmes grilles de temps
 que NLL (plugin tttnll, installé par profil_vers_seiscomp.py).
 
-Réglages : un modèle d'essai (modeles_scrtdd/<modèle>.yaml, ou un fichier
+Réglages : un modèle de réglages (modeles_scrtdd/<modèle>.yaml, ou un fichier
 YAML au même format) donne le tri des événements (section entrees) et les
 paramètres du profil scrtdd (section profil, noms de scrtdd 2.x). --set
-change une valeur pour cet essai seulement ; les valeurs effectives sont
-écrites dans essai.yaml, avec le run, la période et les comptes.
+change une valeur pour cette relocalisation seulement ; les valeurs effectives sont
+écrites dans reloc.yaml, avec le run, la période et les comptes.
 
 Événements gardés : localisés par NLLoc (LOCATED), avec un PUBLIC_ID, sur la
 période --debut / --fin si elle est donnée, de RMS ≤ entrees.rms_max et avec
@@ -29,7 +29,7 @@ de référence (evenements.csv du run, en général le LOCSAT manuel) au lieu
 des localisations NLL : mêmes événements, mêmes phases et mêmes stations,
 pour comparer les deux points de départ de la double différence.
 
-Sorties (dans <run.runs_dir>/<run>/scrtdd/<essai>/, ou --sortie) :
+Sorties (dans <run.runs_dir>/<run>/scrtdd/<reloc>/, ou --sortie) :
   - station.csv   : latitude,longitude,elevation (m),networkCode,stationCode,locationCode
   - event.csv     : id,isotime,latitude,longitude,depth (km),magnitude
                     (id = 1, 2, … ; magnitude 0 si absente de l'export fdsnws)
@@ -40,9 +40,9 @@ Sorties (dans <run.runs_dir>/<run>/scrtdd/<essai>/, ou --sortie) :
                     (origin = origine de référence dont viennent les pointés,
                     event = Event ID SeisComP) : LocQuality (ScrtddRun) s'en
                     sert pour relier les id scrtdd aux Event ID.
-  - scrtdd_<essai>.cfg : le profil scrtdd de l'essai (profile.<essai>.*), à
+  - scrtdd_<reloc>.cfg : le profil scrtdd de la relocalisation (profile.<reloc>.*), à
                     ajouter à ~/.seiscomp/scrtdd.cfg
-  - essai.yaml    : run, période, modèle, modifications (--set), valeurs
+  - reloc.yaml    : run, période, modèle, modifications (--set), valeurs
                     effectives, comptes, machine et dossier distant
   - LANCER.txt    : commandes à copier, dans l'ordre (copie, profil, formes
                     d'onde, scrtdd, vérification, rapatriement)
@@ -58,19 +58,19 @@ Sorties (dans <run.runs_dir>/<run>/scrtdd/<essai>/, ou --sortie) :
 
 Les positions des stations viennent de l'inventaire SeisComP
 (fdsnws-station), valides sur la période du run. Les sorties de scrtdd
-(reloc-event.csv…) sont rapatriées dans le dossier de l'essai, à côté de
+(reloc-event.csv…) sont rapatriées dans le dossier de la relocalisation, à côté de
 l'eventlist : les analyses dd_* de LocQuality le lisent directement.
 
 Le script ne se connecte pas au serveur et n'écrit rien en base.
 
 Utilisation :
-    python scrtdd_inputs.py --run 05_ubaye_1D_topo_20230514_20250630 --essai ubaye_dec24 \\
+    python scrtdd_inputs.py --run 05_ubaye_1D_topo_20230514_20250630 --reloc ubaye_dec24 \\
         --debut 2024-12-01 --fin 2025-02-28
-    python scrtdd_inputs.py --run <run> --essai jura_v5 --modele region
-    python scrtdd_inputs.py --run <run> --essai ubaye_dec24_amorti --debut 2024-12-01 \\
+    python scrtdd_inputs.py --run <run> --reloc jura_v5 --modele region
+    python scrtdd_inputs.py --run <run> --reloc ubaye_dec24_amorti --debut 2024-12-01 \\
         --fin 2025-02-28 --set solver.dampingFactor=0.05 --set entrees.rms_max=0.3
-    python scrtdd_inputs.py --run <run> --essai ubaye_sans_cc --set crossCorrelation.enable=false
-    python scrtdd_inputs.py --run <run> --essai ubaye_locsat --origines reference
+    python scrtdd_inputs.py --run <run> --reloc ubaye_sans_cc --set crossCorrelation.enable=false
+    python scrtdd_inputs.py --run <run> --reloc ubaye_locsat --origines reference
 """
 
 import argparse
@@ -106,7 +106,10 @@ POST_CHUNK = 2000
 # Script de téléchargement (dépôt), copié à côté des fichiers POST
 WAVEFORM_SCRIPT = Path(__file__).resolve().parent / "telecharger_formes_onde.py"
 
-# Modèles d'essai livrés avec le dépôt (--modele <nom>)
+# Source des formes d'onde de scrtdd (-I) quand la config n'a pas de fetch.recordstream
+DEFAULT_RECORDSTREAM = "fdsnws://ist-scprod-sig.u-ga.fr:8081"
+
+# Modèles de réglages livrés avec le dépôt (--modele <nom>)
 MODELS_DIR = Path(__file__).resolve().parent / "modeles_scrtdd"
 
 
@@ -249,21 +252,21 @@ def write_csv(path, columns, rows):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ESSAI : MODÈLE, PROFIL SCRTDD, COMMANDES
+# RELOCALISATION : MODÈLE, PROFIL SCRTDD, COMMANDES
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Nom d'essai = nom du profil scrtdd (clé de configuration SeisComP)
-ESSAI_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+# Nom de la relocalisation = nom du profil scrtdd (clé de configuration SeisComP)
+RELOC_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
 
 def load_model(name):
-    """Modèle d'essai : modeles_scrtdd/<name>.yaml du dépôt, ou un chemin vers un fichier YAML."""
+    """Modèle de réglages : modeles_scrtdd/<name>.yaml du dépôt, ou un chemin vers un fichier YAML."""
     path = Path(name).expanduser()
     if not path.suffix:
         path = MODELS_DIR / f"{name}.yaml"
     if not path.exists():
         names = sorted(p.stem for p in MODELS_DIR.glob("*.yaml"))
-        raise SystemExit(f"Modèle d'essai introuvable : {path} (modèles du dépôt : {', '.join(names)})")
+        raise SystemExit(f"Modèle de réglages introuvable : {path} (modèles du dépôt : {', '.join(names)})")
     model = yaml.safe_load(path.read_text()) or {}
     model["entrees"] = model.get("entrees") or {}
     model["profil"] = model.get("profil") or {}
@@ -321,103 +324,110 @@ def profile_cfg(name, params, table_model, region, header):
     return "\n".join(lines) + "\n"
 
 
-def lancer_text(essai, run, debut, fin, modele, changes, counts, login, remote, out_dir,
-                archive, profil, n_profile_lines, cross_correlation):
+def lancer_text(reloc, run, debut, fin, modele, changes, counts, login, remote, out_dir,
+                archive, profil, n_profile_lines, cross_correlation,
+                recordstream=DEFAULT_RECORDSTREAM):
     """LANCER.txt : commandes à copier, sans commentaires (zsh), dans l'ordre."""
     cmd = (f"seiscomp exec scrtdd --reloc-catalog station.csv,event.csv,phase.csv "
-           f"--profile {essai} --dump-diagnostics --verbosity=3 --console=1 -d \"$BASE\"")
+           f"--profile {reloc} --dump-diagnostics --verbosity=3 --console=1 -d \"$BASE\"")
     mods = f", modifié par --set : {'; '.join(changes)}" if changes else ""
     if cross_correlation:
-        waveforms = f"""3. Formes d'onde pour la corrélation croisée ({counts['fenetres']} fenêtres). Si l'archive de
-   la machine les a toutes, passer à l'étape 4. Sinon (le log de l'étape 5
-   le dit : « not available »), les rassembler dans une archive dédiée,
-   commune aux essais du run ; les réseaux qu'aucun centre public ne sert
-   sont pris dans l'archive de la machine avec --archive-serveur (voir
-   telecharger_formes_onde.py) :
+        run_step = f"""4. Relocalisation (seiscomp exec charge l'environnement de SeisComP, sans
+   quoi le plugin tttnll est introuvable). Les formes d'onde ({counts['fenetres']} fenêtres)
+   sont lues sur {recordstream} et gardées dans le cache de scrtdd
+   (performance.cacheDirectory) : une relance est bien plus rapide.
+
+cd {remote}
+{cmd} -I "{recordstream}" 2>&1 | tee scrtdd.log
+"""
+        waveforms = f"""5. Formes d'onde manquantes : si la ligne de bilan de l'étape 6 donne
+   beaucoup de « not available » (une poignée est sans conséquence), rassembler les formes d'onde dans une archive dédiée,
+   commune aux relocalisations du run (centres de données publics par le
+   routage EIDA ; voir telecharger_formes_onde.py, --archive-serveur pour
+   les réseaux qu'aucun centre public ne sert), puis relancer avec elle :
 
 cd {remote}
 python3 telecharger_formes_onde.py --archive {archive}
-"""
-        with_archive = f"""
-   Avec l'archive dédiée de l'étape 3 :
-
 {cmd} -I sdsarchive://{archive} 2>&1 | tee scrtdd.log
 """
     else:
-        waveforms = """3. Pas de corrélation croisée (crossCorrelation.enable = false) : pas de
-   formes d'onde à rassembler.
+        run_step = f"""4. Relocalisation (seiscomp exec charge l'environnement de SeisComP, sans
+   quoi le plugin tttnll est introuvable) :
+
+cd {remote}
+{cmd} 2>&1 | tee scrtdd.log
 """
-        with_archive = ""
-    title = f"Essai scrtdd {essai} : run {run}, du {debut} au {fin}"
+        waveforms = """5. Pas de corrélation croisée (crossCorrelation.enable = false) : pas de
+   formes d'onde.
+"""
+    title = f"Relocalisation scrtdd {reloc} : run {run}, du {debut} au {fin}"
     return f"""{title}
 {'=' * len(title)}
 Préparé par scrtdd_inputs.py le {date.today().isoformat()} : {counts['evenements']} événements, {counts['phases']} phases,
 {counts['stations']} stations. Modèle {modele}{mods}.
-Réglages effectifs : essai.yaml. Pour en changer, relancer scrtdd_inputs.py
+Réglages effectifs : reloc.yaml. Pour en changer, relancer scrtdd_inputs.py
 avec --set … --force plutôt que de modifier les fichiers sur le serveur :
-essai.yaml doit dire ce qui a tourné.
+reloc.yaml doit dire ce qui a tourné.
 
 0. Prérequis, une fois par profil NLL : le profil {profil} installé avec
    profil_vers_seiscomp.py (étape 5 de son INSTALLER.txt : plugin tttnll et
-   table {profil}). Sur la machine SeisComP, la ligne doit citer {profil} :
+   table {profil}, dossier de cache). Sur la machine SeisComP, la première
+   ligne doit citer {profil}, la seconde un dossier du compte :
 
 grep "^ttt.NLLGrid.tables" ~/.seiscomp/scrtdd.cfg
+grep "^performance.cacheDirectory" ~/.seiscomp/scrtdd.cfg
 
-1. Copier l'essai (depuis cette machine) :
+1. Copier la relocalisation (depuis cette machine) :
 
 ssh {login} "mkdir -p {remote}"
 rsync -avz {out_dir}/ {login}:{remote}/
 
-2. Sur la machine SeisComP, ajouter le profil {essai} à la configuration de
+2. Sur la machine SeisComP, ajouter le profil {reloc} à la configuration de
    scrtdd (une seule fois ; le compte doit donner {n_profile_lines}) :
 
-grep -q "^profile.{essai}\\." ~/.seiscomp/scrtdd.cfg || cat {remote}/scrtdd_{essai}.cfg >> ~/.seiscomp/scrtdd.cfg
-grep -c "^profile.{essai}\\." ~/.seiscomp/scrtdd.cfg
+grep -q "^profile.{reloc}\\." ~/.seiscomp/scrtdd.cfg || cat {remote}/scrtdd_{reloc}.cfg >> ~/.seiscomp/scrtdd.cfg
+grep -c "^profile.{reloc}\\." ~/.seiscomp/scrtdd.cfg
 
-{waveforms}
-4. Connexion à la base (inventaire des stations : orientation des
+3. Connexion à la base (inventaire des stations : orientation des
    composantes pour la corrélation croisée). La deuxième commande doit
    afficher une adresse du type mysql://…@…/seiscomp :
 
 BASE=$(grep -h "^database *=" ~/.seiscomp/scolv-PROD.cfg ~/.seiscomp/global.cfg 2>/dev/null | head -1 | cut -d= -f2- | xargs)
 echo "$BASE"
 
-5. Relocalisation (seiscomp exec charge l'environnement de SeisComP, sans
-   quoi le plugin tttnll est introuvable) :
+{run_step}
+{waveforms}
+6. Vérifications : bilan des formes d'onde (« downloaded … not available … »,
+   sinon étape 5) ; les valeurs de reloc.yaml doivent apparaître dans le
+   log ; nombre d'événements relocalisés (sur {counts['evenements']} ; ceux sans assez de
+   voisins pour former des couples ne le sont pas) :
 
-cd {remote}
-{cmd} 2>&1 | tee scrtdd.log
-{with_archive}
-6. Vérifications : les valeurs d'essai.yaml doivent apparaître dans le log ;
-   nombre d'événements relocalisés (sur {counts['evenements']}) ; formes d'onde manquantes
-   (0 attendu avec la corrélation croisée) :
-
+grep "Catalog waveform data" scrtdd.log
 grep -i -E "dampingFactor|absoluteLocationConstraint|minCCCoef|maxInterEventDistance" scrtdd.log | head -20
 grep -c ",true," reloc-event.csv
-grep -c -i "not available" scrtdd.log
 
-7. Rapatrier les sorties dans le dossier de l'essai (depuis cette machine) :
+7. Rapatrier les sorties dans le dossier de la relocalisation (depuis cette machine) :
 
 rsync -avz --exclude mseed/ {login}:{remote}/ {out_dir}/
 
-   Pour l'analyser avec LocQuality_ToolBox, ajouter l'essai à
+   Pour l'analyser avec LocQuality_ToolBox, ajouter la relocalisation à
    compare.scrtdd_runs de son config.yaml :
-   {essai}: "{out_dir}"
+   {reloc}: "{out_dir}"
 """
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Prépare un essai scrtdd (entrées, profil, commandes) à partir d'un run NLL local."
+        description="Prépare une relocalisation scrtdd (entrées, profil, commandes) à partir d'un run NLL local."
     )
     parser.add_argument("--run", required=True, help="Nom du run (dossier de run.runs_dir)")
-    parser.add_argument("--essai", required=True,
-                        help="Nom de l'essai, qui est aussi celui du profil scrtdd "
+    parser.add_argument("--reloc", required=True,
+                        help="Nom de la relocalisation, qui est aussi celui du profil scrtdd "
                              "(lettres, chiffres et _, ex. ubaye_dec24)")
     parser.add_argument("--modele", default="essaim",
-                        help="Modèle d'essai : essaim (défaut), region, ou chemin d'un fichier YAML")
+                        help="Modèle de réglages : essaim (défaut), region, ou chemin d'un fichier YAML")
     parser.add_argument("--set", action="append", metavar="CLE=VALEUR",
-                        help="Change une valeur du modèle pour cet essai (répétable), ex. "
+                        help="Change une valeur du modèle pour cette relocalisation (répétable), ex. "
                              "solver.dampingFactor=0.05 ou entrees.rms_max=0.3")
     parser.add_argument("--debut", type=date.fromisoformat,
                         help="Premier jour gardé (AAAA-MM-JJ, défaut : début du run)")
@@ -434,14 +444,17 @@ def parse_args():
                         help="Identifiant sur la machine SeisComP (défaut : celui de cette machine)")
     parser.add_argument("--hote", default="ist-oar.u-ga.fr", help="Machine SeisComP (défaut : ist-oar.u-ga.fr)")
     parser.add_argument("--dossier-distant",
-                        help="Dossier des essais sur la machine SeisComP "
-                             "(défaut : /home/<utilisateur>/scrtdd ; l'essai va dans <run>/<essai>/)")
+                        help="Dossier des relocalisations sur la machine SeisComP "
+                             "(défaut : /home/<utilisateur>/scrtdd ; la relocalisation va dans <run>/<reloc>/)")
     parser.add_argument("--archive",
                         help="Archive SDS dédiée aux formes d'onde du run "
                              "(défaut : /home/<utilisateur>/sds/<run>)")
-    parser.add_argument("--sortie", help="Dossier de sortie (défaut : <run>/scrtdd/<essai>)")
+    parser.add_argument("--recordstream",
+                        help="Source des formes d'onde de scrtdd (-I), ex. fdsnws://hôte:port "
+                             f"(défaut : fetch.recordstream de la config, sinon {DEFAULT_RECORDSTREAM})")
+    parser.add_argument("--sortie", help="Dossier de sortie (défaut : <run>/scrtdd/<reloc>)")
     parser.add_argument("--force", action="store_true",
-                        help="Remplacer un essai existant du même nom (sorties rapatriées comprises)")
+                        help="Remplacer une relocalisation existante du même nom (sorties rapatriées comprises)")
     parser.add_argument(
         "--config",
         default=str(Path(__file__).resolve().parent / "config.yaml"),
@@ -452,8 +465,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    if not ESSAI_NAME.match(args.essai):
-        raise SystemExit("--essai : lettres, chiffres et _ seulement, en commençant par une lettre "
+    if not RELOC_NAME.match(args.reloc):
+        raise SystemExit("--reloc : lettres, chiffres et _ seulement, en commençant par une lettre "
                          "(c'est aussi le nom du profil scrtdd)")
     model_path, model = load_model(args.modele)
     changes = apply_overrides(model, args.set)
@@ -471,15 +484,15 @@ def main():
         raise SystemExit(f"Configuration du profil NLL introuvable : {conf_path}")
     debut = args.debut or date.fromisoformat(meta["debut"])
     fin = args.fin or date.fromisoformat(meta["fin"])
-    out_dir = Path(args.sortie) if args.sortie else run_dir / "scrtdd" / args.essai
+    out_dir = Path(args.sortie) if args.sortie else run_dir / "scrtdd" / args.reloc
     if out_dir.exists() and any(out_dir.iterdir()):
         if not args.force:
-            raise SystemExit(f"L'essai {out_dir} existe déjà (--force pour le remplacer, "
-                             "ou un autre --essai)")
+            raise SystemExit(f"La relocalisation {out_dir} existe déjà (--force pour la remplacer, "
+                             "ou un autre --reloc)")
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    log(f"Essai {args.essai} : run {args.run}, du {debut} au {fin}, modèle {model_path.stem}")
+    log(f"Relocalisation {args.reloc} : run {args.run}, du {debut} au {fin}, modèle {model_path.stem}")
     for change in changes:
         log(f"--set {change}", 1)
     located = select_events(read_hyp(run_dir / f"{args.run}.hyp"), debut, fin)
@@ -556,31 +569,34 @@ def main():
         f"+ {WAVEFORM_SCRIPT.name}", 1)
 
     login = f"{args.utilisateur}@{args.hote}"
-    remote = f"{(args.dossier_distant or f'/home/{args.utilisateur}/scrtdd').rstrip('/')}/{args.run}/{args.essai}"
+    remote = f"{(args.dossier_distant or f'/home/{args.utilisateur}/scrtdd').rstrip('/')}/{args.run}/{args.reloc}"
     archive = args.archive or f"/home/{args.utilisateur}/sds/{args.run}"
+    recordstream = (args.recordstream or config.get("fetch", {}).get("recordstream")
+                    or DEFAULT_RECORDSTREAM)
     counts = {"evenements_localises": len(located), "ecartes_rms": len(located) - len(events),
               "ecartes_phases": len(events) - len(ev_rows), "evenements": len(ev_rows), "phases": len(ph_rows), "stations": len(st_rows),
               "fenetres": len(windows)}
     region = locgrid_region(conf_path.read_text().splitlines())
-    header = [f"Profil scrtdd de l'essai {args.essai} (run {args.run}, du {debut} au {fin}),",
+    header = [f"Profil scrtdd de la relocalisation {args.reloc} (run {args.run}, du {debut} au {fin}),",
               f"écrit par scrtdd_inputs.py (Loc_ToolBox) le {date.today().isoformat()}, "
               f"modèle {model_path.stem}.",
-              "Réglages et comptes : essai.yaml. Voir LANCER.txt."]
-    cfg = profile_cfg(args.essai, params, profil, region, header)
-    (out_dir / f"scrtdd_{args.essai}.cfg").write_text(cfg)
-    record = {"essai": args.essai, "run": args.run, "profil_nll": profil,
+              "Réglages et comptes : reloc.yaml. Voir LANCER.txt."]
+    cfg = profile_cfg(args.reloc, params, profil, region, header)
+    (out_dir / f"scrtdd_{args.reloc}.cfg").write_text(cfg)
+    record = {"reloc": args.reloc, "run": args.run, "profil_nll": profil,
               "debut": debut.isoformat(), "fin": fin.isoformat(), "origines": args.origines,
               "prepare_le": datetime.now().isoformat(timespec="seconds"),
               "modele": str(model_path), "description": model.get("description"),
               "modifications": changes, "comptes": counts,
-              "machine": login, "dossier_distant": remote, "archive_formes_onde": archive,
+              "machine": login, "dossier_distant": remote, "formes_onde": recordstream,
+              "archive_formes_onde": archive,
               "entrees": entrees, "profil": params}
-    (out_dir / "essai.yaml").write_text(yaml.safe_dump(record, allow_unicode=True, sort_keys=False))
+    (out_dir / "reloc.yaml").write_text(yaml.safe_dump(record, allow_unicode=True, sort_keys=False))
     n_lines = sum(1 for line in cfg.splitlines() if line.startswith("profile."))
     (out_dir / "LANCER.txt").write_text(
-        lancer_text(args.essai, args.run, debut, fin, model_path.stem, changes, counts, login,
+        lancer_text(args.reloc, args.run, debut, fin, model_path.stem, changes, counts, login,
                     remote, out_dir, archive, profil, n_lines,
-                    bool(params.get("crossCorrelation.enable"))))
+                    bool(params.get("crossCorrelation.enable")), recordstream))
     log(f"→ {out_dir} (commandes : LANCER.txt)", 1)
 
 
