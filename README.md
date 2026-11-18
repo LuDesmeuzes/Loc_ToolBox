@@ -32,8 +32,8 @@ lit directement les dossiers produits ici.
 ## Par où commencer
 
 1. **Installer** les outils et NonLinLoc, puis faire le **premier essai sur
-   le Jura** (sections [Installation](#installation) et
-   [Premier essai](#premier-essai--le-jura-en-10-minutes), une dizaine de
+   l'Ubaye** (sections [Installation](#installation) et
+   [Premier essai](#premier-essai--lubaye-en-5-minutes), quelques
    minutes).
 2. **Comprendre ce que font les outils** : le PDF *Mise en place NLL sur
    SeisComP* (`docs/`) explique les concepts, les paramètres ligne par ligne
@@ -52,7 +52,7 @@ lit directement les dossiers produits ici.
 - macOS ou Linux, Python 3.9 ou plus récent, `git`, un compilateur C et
   `cmake` (pour NonLinLoc).
 - Un accès au service web **fdsnws** du serveur SeisComP de la région
-  (ex. `http://ist-scjura-sig.u-ga.fr:8080/fdsnws` pour le Jura). Les
+  (ex. `http://ist-scprod-sig.u-ga.fr:8080/fdsnws`, le serveur de production). Les
   serveurs de l'ISTerre se consultent depuis le réseau de l'université ;
   ailleurs, passer par le VPN.
 - Un accès à internet pour la topographie (données SRTM, téléchargées une
@@ -136,43 +136,47 @@ Contenu du dossier de travail :
 └── runs/                  un dossier par run
 ```
 
-## Premier essai : le Jura en 10 minutes
+## Premier essai : l'Ubaye en 5 minutes
 
-L'exemple crée un profil 1D pour le Jura, puis localise les 25 séismes de
-mars 2024. Il faut l'accès au serveur fdsnws du Jura. Depuis le dossier
-`Loc_ToolBox`, environnement activé :
+L'exemple crée un profil 1D pour l'Ubaye, puis localise les quelque 1 080
+séismes de septembre 2024 (essaim de l'Ubaye). Il faut l'accès au serveur
+fdsnws de production (`ist-scprod-sig`). Depuis le dossier `Loc_ToolBox`,
+environnement activé :
 
-1. Créer le profil et la configuration de la région (≈ 15 s, topographie
+1. Créer le profil et la configuration de la région (≈ 5 s, topographie
    comprise) :
 
 ```bash
-python creer_profil.py --region exemple_jura --nom exemple_jura_1D \
-    --modele modeles_vitesse/jura.nd --lat 46.95 47.55 --lon 5.45 7.55 \
-    --prof-max 50 --cellule 4 \
-    --fdsnws http://ist-scjura-sig.u-ga.fr:8080/fdsnws
+python creer_profil.py --region exemple_ubaye --nom exemple_ubaye_1D \
+    --modele modeles_vitesse/alpes_labo.txt --lat 44.39 44.59 --lon 6.61 6.90 \
+    --prof-max 40 --fdsnws http://ist-scprod-sig.u-ga.fr:8080/fdsnws
 ```
 
-2. Localiser mars 2024 (≈ 1 min : 31 jours de pointés, 23 stations,
+2. Localiser septembre 2024 (≈ 1 min : 30 jours de pointés, 34 stations,
    NLLoc). Le plus simple est de copier la commande que l'étape 1 affiche
    sous « Étape suivante », avec le vrai chemin, en remplaçant les
    `AAAA-MM-JJ` par les dates. Écrite à la main, `<racine>` est le dossier
    de travail (par défaut `Loc_ToolBox_travail/`, à côté du dépôt) :
 
 ```bash
-python nll_run.py --config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml \
-    --profil exemple_jura_1D --debut 2024-03-01 --fin 2024-03-31 --grilles
+python nll_run.py --config <racine>/profils_travail/exemple_ubaye/config_exemple_ubaye.yaml \
+    --profil exemple_ubaye_1D --debut 2024-09-01 --fin 2024-09-30 --grilles
 ```
 
 À la fin, le run doit annoncer
-« 25 localisés, 0 rejetés ». Les résultats sont dans
-`<racine>/runs/exemple_jura_1D_20240301_20240331/` :
+« 1083 localisés, 0 rejetés » (le nombre peut varier légèrement si des
+événements ont été revus sur le serveur depuis). Les résultats sont dans
+`<racine>/runs/exemple_ubaye_1D_20240901_20240930/` :
 
-- `exemple_jura_1D_20240301_20240331.hyp` : les localisations au format
+- `exemple_ubaye_1D_20240901_20240930.hyp` : les localisations au format
   NLLoc ;
 - `evenements.csv` : un événement par ligne, avec l'origine du serveur pour
   comparer ;
 - `phases.csv` : les résidus de chaque phase ;
 - `run.yaml` : profil, période, paramètres et comptes.
+
+Le run affiche ensuite les deux étapes suivantes (installer le profil dans
+SeisComP, préparer une relocalisation scrtdd) : voir plus bas.
 
 Pour regarder ces résultats (carte, coupes, comparaison au serveur), passer
 à LocQuality_ToolBox (`paths.nll_runs`).
@@ -212,11 +216,11 @@ Les options obligatoires :
 
 | Option | Ce que c'est | Exemple |
 | --- | --- | --- |
-| `--region` | Nom court de la région. Il nomme la configuration de la région (`<regions_dir>/<région>/config_<région>.yaml`) et le cache des pointés (`par_jour_<région>`). Plusieurs profils peuvent partager une région : un 1D puis un 3D, ou deux modèles à comparer. La configuration existante est alors gardée, à condition que le serveur, la zone et les types d'événements soient les mêmes. | `jura` |
-| `--nom` | Nom du profil. Il nomme le dossier `<profils_dir>/<profil>/`, c'est lui qu'on donne à `nll_run.py --profil`, et il apparaît dans le nom des runs (`<profil>_<début>_<fin>`). Quand le profil est la copie d'un profil NLL de SeisComP, reprendre le même nom. Sinon, l'usage est `<n°>_<région>_<1D ou 3D>[_topo]`. | `1_jura_1D_topo` |
-| `--modele` | Modèle de vitesse 1D (formats ci-dessous). Pour un modèle 3D, voir `--modele-3d` plus bas. | `modeles_vitesse/jura.nd` |
-| `--lat`, `--lon` | Zone des séismes à localiser, en degrés : latitudes min et max, longitudes min et max (est positif). Les pointés sont récupérés dans cette zone, et la grille de recherche la couvre, plus `--marge`. Les stations peuvent être en dehors. | `--lat 46.95 47.55 --lon 5.45 7.55` |
-| `--fdsnws` | Adresse fdsnws du serveur SeisComP de la région, jusqu'à `/fdsnws` : le script y ajoute `/event/1/query` et `/station/1/query`. | `http://ist-scjura-sig.u-ga.fr:8080/fdsnws` |
+| `--region` | Nom court de la région. Il nomme la configuration de la région (`<regions_dir>/<région>/config_<région>.yaml`) et le cache des pointés (`par_jour_<région>`). Plusieurs profils peuvent partager une région : un 1D puis un 3D, ou deux modèles à comparer. La configuration existante est alors gardée, à condition que le serveur, la zone et les types d'événements soient les mêmes. | `ubaye` |
+| `--nom` | Nom du profil. Il nomme le dossier `<profils_dir>/<profil>/`, c'est lui qu'on donne à `nll_run.py --profil`, et il apparaît dans le nom des runs (`<profil>_<début>_<fin>`). Quand le profil est la copie d'un profil NLL de SeisComP, reprendre le même nom. Sinon, l'usage est `<n°>_<région>_<1D ou 3D>[_topo]`. | `1_ubaye_1D_topo` |
+| `--modele` | Modèle de vitesse 1D (formats ci-dessous). Pour un modèle 3D, voir `--modele-3d` plus bas. | `modeles_vitesse/alpes_labo.txt` |
+| `--lat`, `--lon` | Zone des séismes à localiser, en degrés : latitudes min et max, longitudes min et max (est positif). Les pointés sont récupérés dans cette zone, et la grille de recherche la couvre, plus `--marge`. Les stations peuvent être en dehors. | `--lat 44.39 44.59 --lon 6.61 6.90` |
+| `--fdsnws` | Adresse fdsnws du serveur SeisComP de la région, jusqu'à `/fdsnws` : le script y ajoute `/event/1/query` et `/station/1/query`. | `http://ist-scprod-sig.u-ga.fr:8080/fdsnws` |
 
 Les noms de région et de profil sont limités aux lettres sans accent, aux chiffres, à `_` et à `-`, parce qu'ils servent de noms de dossiers et de fichiers. Toutes les options, avec leur valeur par défaut, s'affichent avec `python creer_profil.py --help`.
 
@@ -428,7 +432,7 @@ python profil_vers_seiscomp.py --config <config de la région> --profil <profil>
 ```
 
 Par exemple, pour le profil du premier essai :
-`--config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml --profil exemple_jura_1D`.
+`--config <racine>/profils_travail/exemple_ubaye/config_exemple_ubaye.yaml --profil exemple_ubaye_1D`.
 Pour l'essayer dans scolv (étape 4 d'`INSTALLER.txt`), il faut des
 événements de la région du profil dans la base qu'ouvre scolv.
 
@@ -509,9 +513,9 @@ python scrtdd_inputs.py --config <config de la région> --run <run> --reloc <rel
 ```
 
 `<run>` est le nom d'un run de `nll_run.py` (dossier de `<racine>/runs/`,
-ex. `exemple_jura_1D_20240301_20240331`) ; son profil doit être installé
+ex. `exemple_ubaye_1D_20240901_20240930`) ; son profil doit être installé
 (prérequis ci-dessus). `<reloc>` est un nom libre (lettres, chiffres, `_`),
-par exemple `jura_mars24`.
+par exemple `ubaye_sept24`.
 
 Options, à ajouter si besoin (elles se combinent) :
 - `--debut AAAA-MM-JJ --fin AAAA-MM-JJ` : ne garder qu'une partie du run
@@ -729,9 +733,9 @@ produits) : c'est lui qu'on met à jour avec le code.
   commenté pour un modèle 1D, pour comprendre ce qu'écrit
   `creer_profil.py` ou le faire à la main.
 - `modeles_vitesse/` : modèles 1D prêts à passer en `--modele` :
-  - `jura.nd` : modèle du Jura, utilisé par le premier essai ;
+  - `jura.nd` : modèle du Jura ;
   - `alpes_labo.txt` : modèle à 4 couches du laboratoire, celui du profil
-    SeisComP `1D_ubaye` et des profils 1D du Mont-Blanc ;
+    SeisComP `1D_ubaye`, des profils 1D du Mont-Blanc et du premier essai ;
   - `alpes_paul2001.txt` : modèle à 7 couches de Paul et al. (2001), réseau
     Sismalp (profil `05_ubaye_1D_paul2001`) ;
   - `auvergne_40km.txt` : modèle « auvergne-40km » des tables LOCSAT,

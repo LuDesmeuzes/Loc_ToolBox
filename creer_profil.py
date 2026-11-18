@@ -58,10 +58,9 @@ relatifs à racine, valeurs par défaut sinon. NLL est cherché par
 nll_common.find_nll() (installer_nll.py l'installe dans <racine>/bin).
 
 Utilisation :
-    python creer_profil.py --region jura --nom 1_jura_1D_topo \\
-        --modele ../../donnees/modele_vitesse/jura.nd \\
-        --lat 46.95 47.55 --lon 5.45 7.55 --pas 1 --prof-max 50 --cellule 4 \\
-        --fdsnws http://ist-scjura-sig.u-ga.fr:8080/fdsnws
+    python creer_profil.py --region exemple_ubaye --nom exemple_ubaye_1D \\
+        --modele modeles_vitesse/alpes_labo.txt --lat 44.39 44.59 --lon 6.61 6.90 \\
+        --prof-max 40 --fdsnws http://ist-scprod-sig.u-ga.fr:8080/fdsnws
     python creer_profil.py --region montblanc --nom 1_montblanc_3D_topo --modele-3d \\
         --lat 45.72 45.95 --lon 6.70 7.03 --pas 1 \\
         --fdsnws http://ist-scprod-sig.u-ga.fr:8080/fdsnws

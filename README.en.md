@@ -38,8 +38,8 @@ repository, which reads the folders produced here directly.
 ## Getting started
 
 1. **Install** the tools and NonLinLoc, then do the **first try on the
-   Jura** (sections [Installation](#installation) and
-   [First try](#first-try-the-jura-in-10-minutes), about ten minutes).
+   Ubaye** (sections [Installation](#installation) and
+   [First try](#first-try-the-ubaye-in-5-minutes), a few minutes).
 2. **Understand what the tools do**: the PDF *Mise en place NLL sur
    SeisComP* (`docs/`, in French) explains the concepts, the parameters line
    by line and the installation on OAR. The commands themselves are in this
@@ -58,7 +58,7 @@ repository, which reads the folders produced here directly.
 - macOS or Linux, Python 3.9 or newer, `git`, a C compiler and `cmake`
   (for NonLinLoc).
 - Access to the **fdsnws** web service of the region's SeisComP server
-  (e.g. `http://ist-scjura-sig.u-ga.fr:8080/fdsnws` for the Jura). ISTerre
+  (e.g. `http://ist-scprod-sig.u-ga.fr:8080/fdsnws`, the production server). ISTerre
   servers are reachable from the university network; elsewhere, use the
   VPN.
 - Internet access for topography (SRTM data, downloaded once).
@@ -139,43 +139,47 @@ Contents of the working folder:
 └── runs/                  one folder per run
 ```
 
-## First try: the Jura in 10 minutes
+## First try: the Ubaye in 5 minutes
 
-This example creates a 1D profile for the Jura, then locates the 25
-earthquakes of March 2024. It requires access to the Jura fdsnws server.
-From the `Loc_ToolBox` folder, with the environment activated:
+This example creates a 1D profile for the Ubaye, then locates the roughly
+1,080 earthquakes of September 2024 (Ubaye swarm). It requires access to the
+production fdsnws server (`ist-scprod-sig`). From the `Loc_ToolBox` folder,
+with the environment activated:
 
-1. Create the profile and the region configuration (≈ 15 s, topography
+1. Create the profile and the region configuration (≈ 5 s, topography
    included):
 
 ```bash
-python creer_profil.py --region exemple_jura --nom exemple_jura_1D \
-    --modele modeles_vitesse/jura.nd --lat 46.95 47.55 --lon 5.45 7.55 \
-    --prof-max 50 --cellule 4 \
-    --fdsnws http://ist-scjura-sig.u-ga.fr:8080/fdsnws
+python creer_profil.py --region exemple_ubaye --nom exemple_ubaye_1D \
+    --modele modeles_vitesse/alpes_labo.txt --lat 44.39 44.59 --lon 6.61 6.90 \
+    --prof-max 40 --fdsnws http://ist-scprod-sig.u-ga.fr:8080/fdsnws
 ```
 
-2. Locate March 2024 (≈ 1 min: 31 days of picks, 23 stations, NLLoc). The
-   easiest is to copy the command that step 1 prints under « Étape
+2. Locate September 2024 (≈ 1 min: 30 days of picks, 34 stations, NLLoc).
+   The easiest is to copy the command that step 1 prints under « Étape
    suivante » (next step), which has the actual path, replacing the
    `AAAA-MM-JJ` placeholders (YYYY-MM-DD) with the dates. Written by hand,
    `<racine>` is the working folder (by default `Loc_ToolBox_travail/`, next
    to the repository):
 
 ```bash
-python nll_run.py --config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml \
-    --profil exemple_jura_1D --debut 2024-03-01 --fin 2024-03-31 --grilles
+python nll_run.py --config <racine>/profils_travail/exemple_ubaye/config_exemple_ubaye.yaml \
+    --profil exemple_ubaye_1D --debut 2024-09-01 --fin 2024-09-30 --grilles
 ```
 
-At the end, the run should report « 25 localisés, 0 rejetés » (25 located,
-0 rejected). The results are in
-`<racine>/runs/exemple_jura_1D_20240301_20240331/`:
+At the end, the run should report « 1083 localisés, 0 rejetés » (1083
+located, 0 rejected; the number may vary slightly if events have been
+reviewed on the server since). The results are in
+`<racine>/runs/exemple_ubaye_1D_20240901_20240930/`:
 
-- `exemple_jura_1D_20240301_20240331.hyp`: the locations in NLLoc format;
+- `exemple_ubaye_1D_20240901_20240930.hyp`: the locations in NLLoc format;
 - `evenements.csv`: one event per line, with the server origin for
   comparison;
 - `phases.csv`: the residuals of each phase;
 - `run.yaml`: profile, period, parameters and counts.
+
+The run then prints the next two steps (install the profile in SeisComP,
+prepare a scrtdd relocation): see below.
 
 To look at these results (map, cross-sections, comparison with the server),
 move on to LocQuality_ToolBox (`paths.nll_runs`).
@@ -213,11 +217,11 @@ Required options:
 
 | Option | What it is | Example |
 | --- | --- | --- |
-| `--region` | Short region name. It names the region configuration (`<regions_dir>/<region>/config_<region>.yaml`) and the picks cache (`par_jour_<region>`). Several profiles can share a region: a 1D then a 3D, or two models to compare. The existing configuration is then kept, provided the server, the area and the event types are the same. | `jura` |
-| `--nom` | Profile name. It names the folder `<profils_dir>/<profile>/`, it is what you pass to `nll_run.py --profil`, and it appears in run names (`<profile>_<start>_<end>`). When the profile is a copy of a SeisComP NLL profile, reuse the same name. Otherwise, the convention is `<n>_<region>_<1D or 3D>[_topo]`. | `1_jura_1D_topo` |
-| `--modele` | 1D velocity model (formats below). For a 3D model, see `--modele-3d` below. | `modeles_vitesse/jura.nd` |
-| `--lat`, `--lon` | Area of the earthquakes to locate, in degrees: min and max latitudes, min and max longitudes (east positive). Picks are fetched in this area, and the search grid covers it, plus `--marge`. Stations may lie outside. | `--lat 46.95 47.55 --lon 5.45 7.55` |
-| `--fdsnws` | fdsnws address of the region's SeisComP server, up to `/fdsnws`: the script appends `/event/1/query` and `/station/1/query`. | `http://ist-scjura-sig.u-ga.fr:8080/fdsnws` |
+| `--region` | Short region name. It names the region configuration (`<regions_dir>/<region>/config_<region>.yaml`) and the picks cache (`par_jour_<region>`). Several profiles can share a region: a 1D then a 3D, or two models to compare. The existing configuration is then kept, provided the server, the area and the event types are the same. | `ubaye` |
+| `--nom` | Profile name. It names the folder `<profils_dir>/<profile>/`, it is what you pass to `nll_run.py --profil`, and it appears in run names (`<profile>_<start>_<end>`). When the profile is a copy of a SeisComP NLL profile, reuse the same name. Otherwise, the convention is `<n>_<region>_<1D or 3D>[_topo]`. | `1_ubaye_1D_topo` |
+| `--modele` | 1D velocity model (formats below). For a 3D model, see `--modele-3d` below. | `modeles_vitesse/alpes_labo.txt` |
+| `--lat`, `--lon` | Area of the earthquakes to locate, in degrees: min and max latitudes, min and max longitudes (east positive). Picks are fetched in this area, and the search grid covers it, plus `--marge`. Stations may lie outside. | `--lat 44.39 44.59 --lon 6.61 6.90` |
+| `--fdsnws` | fdsnws address of the region's SeisComP server, up to `/fdsnws`: the script appends `/event/1/query` and `/station/1/query`. | `http://ist-scprod-sig.u-ga.fr:8080/fdsnws` |
 
 Region and profile names are limited to unaccented letters, digits, `_` and `-`, because they are used as folder and file names. All options, with their default values, are listed by `python creer_profil.py --help`.
 
@@ -427,7 +431,7 @@ python profil_vers_seiscomp.py --config <region config> --profil <profile>
 ```
 
 For example, for the profile of the first try:
-`--config <racine>/profils_travail/exemple_jura/config_exemple_jura.yaml --profil exemple_jura_1D`.
+`--config <racine>/profils_travail/exemple_ubaye/config_exemple_ubaye.yaml --profil exemple_ubaye_1D`.
 To try it in scolv (step 4 of `INSTALLER.txt`), the database opened by scolv
 needs events from the profile's region.
 
@@ -508,9 +512,9 @@ python scrtdd_inputs.py --config <region config> --run <run> --reloc <reloc>
 ```
 
 `<run>` is the name of an `nll_run.py` run (folder in `<racine>/runs/`,
-e.g. `exemple_jura_1D_20240301_20240331`); its profile must be installed
+e.g. `exemple_ubaye_1D_20240901_20240930`); its profile must be installed
 (prerequisite above). `<reloc>` is a free name (letters, digits, `_`), for
-example `jura_mars24`.
+example `ubaye_sept24`.
 
 Options, to add as needed (they can be combined):
 - `--debut YYYY-MM-DD --fin YYYY-MM-DD`: keep only part of the run (default:
@@ -727,9 +731,9 @@ files): it is the one kept up to date with the code. The French
   file for a 1D model, to understand what `creer_profil.py` writes or to do
   it by hand.
 - `modeles_vitesse/`: 1D models ready to pass as `--modele`:
-  - `jura.nd`: Jura model, used by the first try;
+  - `jura.nd`: Jura model;
   - `alpes_labo.txt`: the lab's 4-layer model, used by the SeisComP profile
-    `1D_ubaye` and the Mont-Blanc 1D profiles;
+    `1D_ubaye`, the Mont-Blanc 1D profiles and the first try;
   - `alpes_paul2001.txt`: 7-layer model from Paul et al. (2001), Sismalp
     network (profile `05_ubaye_1D_paul2001`);
   - `auvergne_40km.txt`: "auvergne-40km" model from the LOCSAT tables,
