@@ -128,6 +128,22 @@ def load_config(config_path):
     return config
 
 
+# Langues des fichiers d'instructions générés (INSTALLER.txt, LANCER.txt, commentaires des .cfg)
+LANGUES = ("fr", "en")
+
+
+def output_language(config, override=None):
+    """
+    Langue des fichiers d'instructions : --langue (override), sinon la clé
+    `langue` de la configuration, sinon fr. Les commandes sont les mêmes dans
+    toutes les langues ; seuls les textes explicatifs changent.
+    """
+    langue = (override or (config or {}).get("langue") or "fr").strip().lower()
+    if langue not in LANGUES:
+        raise SystemExit(f"langue : {langue!r} inconnue (choix : {', '.join(LANGUES)})")
+    return langue
+
+
 def require_nll(config):
     """Chemin de NLLoc ; s'arrête avec la marche à suivre s'il est introuvable."""
     nlloc = (config.get("run") or {}).get("nlloc")

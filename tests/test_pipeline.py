@@ -679,3 +679,67 @@ def test_profil_vers_seiscomp_xml_screloc(tmp_path):
     cfg = screloc_cfg("p1", "/home/u/nll", "NonLinLoc.profile.p1.earthModelID = p1\n", 0.02)
     assert "reloc.allowManualOrigins = true" in cfg and "NonLinLoc.defaultPickError = 0.02" in cfg
     assert "reloc.profile = p1" in cfg and "pour screloc" in cfg
+
+
+# ── Langue des fichiers d'instructions (INSTALLER.txt, LANCER.txt, .cfg) ─────
+
+COMMAND_PREFIXES = ("ssh ", "rsync ", "cp ", "cat ", "sed ", "grep ", "./", "ls ", "mkdir ",
+                    "seiscomp ", "BASE=", "echo ", "for ", "cd ", "python3 ")
+
+
+def commands(text):
+    """Lignes de commande (non indentées) d'un fichier d'instructions, dans l'ordre."""
+    return [l for l in text.splitlines() if l.startswith(COMMAND_PREFIXES)]
+
+
+def settings(text):
+    """Lignes de réglage d'un .cfg (sans les commentaires)."""
+    return [l for l in text.splitlines() if l and not l.startswith("#")]
+
+
+def test_output_language():
+    from nll_common import output_language
+    assert output_language({}) == "fr"
+    assert output_language({"langue": "en"}) == "en"
+    assert output_language({"langue": "en"}, "fr") == "fr"
+    with pytest.raises(SystemExit, match="inconnue"):
+        output_language({"langue": "de"})
+
+
+def test_installer_text_langues():
+    from profil_vers_seiscomp import installer_text
+    args = ("p1", "u@ist-oar", "/home/u/nll", "/local/export/p1", 57, 1200, "/local/runs")
+    fr, en = installer_text(*args), installer_text(*args, langue="en")
+    assert "Installation du profil p1" in fr and "Installing profile p1" in en
+    assert len(commands(fr)) >= 20 and commands(fr) == commands(en)
+    assert "Copier" not in en and "Rien n'est écrit" not in en
+
+
+def test_lancer_text_langues():
+    from datetime import date
+
+    from scrtdd_inputs import lancer_text, profile_header
+    counts = {"evenements": 120, "phases": 2400, "stations": 30, "fenetres": 2000}
+    for cc in (True, False):
+        args = ("ubaye_dec24", "r1", date(2024, 12, 1), date(2025, 2, 28), "essaim",
+                ["solver.dampingFactor = 0.01 → 0.05"], counts, "u@ist-oar",
+                "/home/u/scrtdd/r1/ubaye_dec24", "/local/r1/scrtdd/ubaye_dec24",
+                "/home/u/sds/r1", "05_ubaye_1D_topo", 33, cc)
+        fr, en = lancer_text(*args), lancer_text(*args, langue="en")
+        assert commands(fr) == commands(en) and len(commands(fr)) >= 10
+        assert "Relocalisation scrtdd" in fr and "scrtdd relocation ubaye_dec24" in en
+        assert "changed by --set: solver.dampingFactor" in en
+    header = profile_header("e", "r1", date(2024, 12, 1), date(2025, 2, 28), "essaim", "en")
+    assert header[0].startswith("scrtdd profile of relocation e")
+
+
+def test_cfg_langues():
+    from profil_vers_seiscomp import scolv_cfg, screloc_cfg, scrtdd_cfg
+    block = "NonLinLoc.profile.p1.earthModelID = p1\n"
+    for make in (lambda l: scolv_cfg("p1", "/home/u/nll", block, 0.02, l),
+                 lambda l: screloc_cfg("p1", "/home/u/nll", block, 0.02, l),
+                 lambda l: scrtdd_cfg("p1", "ttt.NLLGrid.p1.tablePath = /x\n", l)):
+        fr, en = make("fr"), make("en")
+        assert settings(fr) == settings(en) and fr != en
+    en = screloc_cfg("p1", "/home/u/nll", block, 0.02, "en")
+    assert "for screloc" in en and "Copied to" in en and "pour" not in en

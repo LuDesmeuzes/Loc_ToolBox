@@ -68,7 +68,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from nll_common import AzimuthalEquidistant, load_config, log
+from nll_common import LANGUES, AzimuthalEquidistant, load_config, log, output_language
 from nll_run import keyword_values, read_grid_control, stations_used, time_grid_root
 
 
@@ -232,62 +232,183 @@ def scrtdd_block(profil, table_path):
     return f"ttt.NLLGrid.{profil}.tablePath = {table_path}\n"
 
 
-def scrtdd_cfg(profil, block):
+# Commentaires des fichiers .cfg générés, par langue (les lignes de réglage ne changent pas)
+CFG_COMMENTS = {
+    "fr": {
+        "scrtdd": ["Grilles NLL comme table de temps de trajet SeisComP (plugin tttnll de",
+                   "scrtdd), écrites par profil_vers_seiscomp.py (Loc_ToolBox). Les",
+                   "profils scrtdd viennent des relocalisations (scrtdd_inputs.py, LANCER.txt)."],
+        "scolv": ["Configuration du plugin NonLinLoc (locnll) pour scolv, écrite par",
+                  "profil_vers_seiscomp.py (Loc_ToolBox). Ajoutée à une copie de",
+                  "scolv-PROD.cfg : voir INSTALLER.txt."],
+        "screloc": ["Configuration du plugin NonLinLoc (locnll) pour screloc, écrite par",
+                    "profil_vers_seiscomp.py (Loc_ToolBox). Copiée dans",
+                    "~/.seiscomp/screloc.cfg : voir INSTALLER.txt."],
+        "pick_error": "Incertitude (s) des pointés sans incertitude, comme en local",
+        "profiles": "Profils disponibles (ordre = priorité pour une recherche automatique)",
+    },
+    "en": {
+        "scrtdd": ["NLL grids as a SeisComP travel time table (tttnll plugin of",
+                   "scrtdd), written by profil_vers_seiscomp.py (Loc_ToolBox). The",
+                   "scrtdd profiles come from the relocations (scrtdd_inputs.py, LANCER.txt)."],
+        "scolv": ["NonLinLoc plugin (locnll) configuration for scolv, written by",
+                  "profil_vers_seiscomp.py (Loc_ToolBox). Appended to a copy of",
+                  "scolv-PROD.cfg: see INSTALLER.txt."],
+        "screloc": ["NonLinLoc plugin (locnll) configuration for screloc, written by",
+                    "profil_vers_seiscomp.py (Loc_ToolBox). Copied to",
+                    "~/.seiscomp/screloc.cfg: see INSTALLER.txt."],
+        "pick_error": "Uncertainty (s) given to picks without one, as locally",
+        "profiles": "Available profiles (order = priority for an automatic search)",
+    },
+}
+
+
+def scrtdd_cfg(profil, block, langue="fr"):
     """scrtdd-NLL.cfg d'une première installation : plugin tttnll, liste des tables, un profil."""
-    return "\n".join([
-        "# Grilles NLL comme table de temps de trajet SeisComP (plugin tttnll de",
-        "# scrtdd), écrites par profil_vers_seiscomp.py (Loc_ToolBox). Les",
-        "# profils scrtdd viennent des relocalisations (scrtdd_inputs.py, LANCER.txt).",
+    return "\n".join([f"# {line}" for line in CFG_COMMENTS[langue]["scrtdd"]] + [
         "plugins = ${plugins}, tttnll",
         f"ttt.NLLGrid.tables = {profil}",
         "",
     ]) + block
 
 
-def screloc_cfg(profil, nllroot, block, pick_error):
+def screloc_cfg(profil, nllroot, block, pick_error, langue="fr"):
     """
     screloc.cfg : plugin et profil comme scolv-NLL.cfg, NonLinLoc choisi,
     origines manuelles acceptées (les origines de départ des XML sont les
     LOCSAT manuelles), sans les fichiers intermédiaires de NLL (une grille
     de densité de probabilité par événement).
     """
-    return scolv_cfg(profil, nllroot, block, pick_error).replace(
-        "pour scolv", "pour screloc").replace(
-        "Ajoutée à une copie de\n# scolv-PROD.cfg", "Copiée dans\n# ~/.seiscomp/screloc.cfg") + "\n".join([
-            "",
-            "NonLinLoc.saveIntermediateOutput = false",
-            "reloc.locator = NonLinLoc",
-            f"reloc.profile = {profil}",
-            "reloc.allowManualOrigins = true",
-        ]) + "\n"
+    return scolv_cfg(profil, nllroot, block, pick_error, langue, "screloc") + "\n".join([
+        "",
+        "NonLinLoc.saveIntermediateOutput = false",
+        "reloc.locator = NonLinLoc",
+        f"reloc.profile = {profil}",
+        "reloc.allowManualOrigins = true",
+    ]) + "\n"
 
 
-def scolv_cfg(profil, nllroot, block, pick_error):
+def scolv_cfg(profil, nllroot, block, pick_error, langue="fr", module="scolv"):
     """
     scolv-NLL.cfg d'une première installation : plugin, chemins, incertitude
     des pointés qui n'en ont pas (celle de nll_run.py, phases.default_error_s ;
-    0,5 s par défaut dans le plugin), un profil.
+    0,5 s par défaut dans le plugin), un profil. module = screloc pour l'en-tête
+    de screloc.cfg.
     """
-    return "\n".join([
-        "# Configuration du plugin NonLinLoc (locnll) pour scolv, écrite par",
-        "# profil_vers_seiscomp.py (Loc_ToolBox). Ajoutée à une copie de",
-        "# scolv-PROD.cfg : voir INSTALLER.txt.",
+    text = CFG_COMMENTS[langue]
+    return "\n".join([f"# {line}" for line in text[module]] + [
         "plugins = ${plugins}, locnll",
         f"NLLROOT = {nllroot}",
         "NonLinLoc.outputPath = ${NLLROOT}/output/",
-        "# Incertitude (s) des pointés sans incertitude, comme en local",
+        f"# {text['pick_error']}",
         f"NonLinLoc.defaultPickError = {pick_error:g}",
         "",
-        "# Profils disponibles (ordre = priorité pour une recherche automatique)",
+        f"# {text['profiles']}",
         f"NonLinLoc.profiles = {profil}",
         "",
     ]) + block
 
 
-def installer_text(profil, login, nllroot, out_dir, n_stations, n_events, runs_dir):
-    """INSTALLER.txt : commandes à copier, sans commentaires (zsh)."""
+def installer_text(profil, login, nllroot, out_dir, n_stations, n_events, runs_dir, langue="fr"):
+    """
+    INSTALLER.txt : commandes à copier, sans commentaires (zsh). langue (fr,
+    en) ne change que les explications : les commandes sont les mêmes.
+    """
     remote = f"{login}:{nllroot}/{profil}/"
     dd = f"{nllroot}/{profil}/screloc"
+    if langue == "en":
+        title = f"Installing profile {profil} in scolv (NonLinLoc plugin)"
+        return f"""{title}
+{'=' * len(title)}
+Folder prepared by profil_vers_seiscomp.py: control file, travel time grids
+of {n_stations} stations, configuration. Nothing is written to the database.
+
+1. Copy the folder to the SeisComP machine (from this machine):
+
+ssh {login} "mkdir -p {nllroot}/output"
+rsync -avz {out_dir}/ {remote}
+
+2. On the SeisComP machine, scolv configuration.
+
+   First installation (no ~/.seiscomp/scolv-NLL.cfg yet): copy the usual
+   configuration, then add the plugin and the profile.
+
+cp ~/.seiscomp/scolv-PROD.cfg ~/.seiscomp/scolv-NLL.cfg
+cat {nllroot}/{profil}/scolv-NLL.cfg >> ~/.seiscomp/scolv-NLL.cfg
+
+   Profile added to an existing scolv-NLL.cfg: the profile's lines, then
+   its name added to the NonLinLoc.profiles list.
+
+cat {nllroot}/{profil}/locnll_{profil}.cfg >> ~/.seiscomp/scolv-NLL.cfg
+sed -i 's/^NonLinLoc.profiles = .*/&, {profil}/' ~/.seiscomp/scolv-NLL.cfg
+grep "^NonLinLoc.profiles" ~/.seiscomp/scolv-NLL.cfg
+
+3. Start scolv with this configuration:
+
+./LaunchScolv.bash NLL
+
+4. Test: open an event in the area, choose the NonLinLoc locator and the
+   profile {profil}, then Relocate. Compare with the local location of the
+   same event (runs/<run>/<run>.hyp).
+
+5. scrtdd with the same grids (tttnll plugin). Check that it is installed:
+
+seiscomp exec bash -c 'ls $SEISCOMP_ROOT/share/plugins' | grep tttnll
+
+   scrtdd cache folder (waveforms), once per machine: by default, scrtdd
+   writes it inside the SeisComP installation, often read-only
+   ("cacheDirectory: failed to create path").
+
+mkdir -p ~/scrtdd/cache
+grep -q "^performance.cacheDirectory" ~/.seiscomp/scrtdd.cfg || echo "performance.cacheDirectory = $HOME/scrtdd/cache" >> ~/.seiscomp/scrtdd.cfg
+grep "^performance.cacheDirectory" ~/.seiscomp/scrtdd.cfg
+
+   First installation (no tttnll in ~/.seiscomp/scrtdd.cfg yet):
+
+cat {nllroot}/{profil}/scrtdd-NLL.cfg >> ~/.seiscomp/scrtdd.cfg
+
+   Table added to a configuration that already has tttnll: path of the
+   grids, then the name added to the ttt.NLLGrid.tables list.
+
+cat {nllroot}/{profil}/scrtdd_{profil}.cfg >> ~/.seiscomp/scrtdd.cfg
+sed -i 's/^ttt.NLLGrid.tables = .*/&, {profil}/' ~/.seiscomp/scrtdd.cfg
+grep "^ttt.NLLGrid.tables" ~/.seiscomp/scrtdd.cfg
+
+   The scrtdd profiles that use this table come from each relocation:
+   scrtdd_inputs.py --run <run> --reloc <name> writes the profile, the
+   inputs and the commands (LANCER.txt).
+
+6. screloc over the whole period of the runs ({n_events} events), from the
+   same origins and picks as locally. Nothing is written to the database:
+   screloc reads the inventory from the database (-d) and writes XML.
+
+   screloc configuration, if it does not have one already (otherwise, add
+   the missing lines of {dd}.cfg by hand):
+
+ls ~/.seiscomp/screloc.cfg
+cp {nllroot}/{profil}/screloc.cfg ~/.seiscomp/screloc.cfg
+
+   Database connection (read from the scolv configuration): the second
+   command should print an address like mysql://…@…/seiscomp.
+
+BASE=$(grep -h "^database *=" ~/.seiscomp/scolv-PROD.cfg ~/.seiscomp/global.cfg | head -1 | cut -d= -f2- | xargs)
+echo "$BASE"
+
+   Relocation, one day after another (seiscomp exec loads the SeisComP
+   environment, without which the locnll plugin cannot be found):
+
+mkdir -p {dd}/sortie
+for f in {dd}/entree/*.xml; do seiscomp exec screloc -d "$BASE" --ep $f --origin-id-suffix .nll > {dd}/sortie/$(basename $f); done
+grep -o '<origin publicID="[^"]*\\.nll"' {dd}/sortie/*.xml | wc -l
+
+   The count should be {n_events}. Each output file contains the starting
+   origins and the relocated origins, whose ID is that of the starting
+   origin followed by .nll.
+
+7. Bring the outputs back (from this machine):
+
+rsync -avz {login}:{dd}/sortie/ {runs_dir}/screloc_{profil}/
+"""
     return f"""Installation du profil {profil} dans scolv (plugin NonLinLoc)
 {'=' * (52 + len(profil))}
 Dossier préparé par profil_vers_seiscomp.py : fichier de contrôle, grilles de
@@ -398,6 +519,9 @@ def parse_args():
                              "(défaut : /home/<utilisateur>/.seiscomp/nll)")
     parser.add_argument("--force", action="store_true",
                         help="Écraser un export existant du même profil")
+    parser.add_argument("--langue", choices=LANGUES,
+                        help="Langue d'INSTALLER.txt et des commentaires des .cfg "
+                             "(défaut : clé langue de la config, sinon fr)")
     parser.add_argument(
         "--config",
         default=str(Path(__file__).resolve().parent / "config.yaml"),
@@ -409,6 +533,7 @@ def parse_args():
 def main():
     args = parse_args()
     config = load_config(args.config)
+    langue = output_language(config, args.langue)
     profils_dir = Path(config["run"]["profils_dir"])
     profile_dir = profils_dir / args.profil
     conf_path = profile_dir / f"NLL.{args.profil}.conf"
@@ -457,11 +582,11 @@ def main():
     block = profile_block(args.profil, grid_root.name, region)
     (out_dir / f"locnll_{args.profil}.cfg").write_text(block)
     pick_error = (config["phases"].get("default_error_s") or {}).get("P", 0.02)
-    (out_dir / "scolv-NLL.cfg").write_text(scolv_cfg(args.profil, nllroot, block, pick_error))
+    (out_dir / "scolv-NLL.cfg").write_text(scolv_cfg(args.profil, nllroot, block, pick_error, langue))
     dd_block = scrtdd_block(args.profil, f"{remote_dir}/time/{grid_root.name}")
     (out_dir / f"scrtdd_{args.profil}.cfg").write_text(dd_block)
-    (out_dir / "scrtdd-NLL.cfg").write_text(scrtdd_cfg(args.profil, dd_block))
-    (out_dir / "screloc.cfg").write_text(screloc_cfg(args.profil, nllroot, block, pick_error))
+    (out_dir / "scrtdd-NLL.cfg").write_text(scrtdd_cfg(args.profil, dd_block, langue))
+    (out_dir / "screloc.cfg").write_text(screloc_cfg(args.profil, nllroot, block, pick_error, langue))
     n_events, absent = copy_day_xml(config["fetch"]["cache_dir"], run_days(runs),
                                     out_dir / "screloc" / "entree")
     log(f"screloc : {n_events} événements dans les XML journaliers de {config['fetch']['cache_dir']}", 1)
@@ -471,7 +596,7 @@ def main():
     n_stations = len(stations) - len(without)
     (out_dir / "INSTALLER.txt").write_text(
         installer_text(args.profil, f"{args.utilisateur}@{args.hote}", nllroot, out_dir, n_stations,
-                       n_events, config["run"]["runs_dir"]))
+                       n_events, config["run"]["runs_dir"], langue))
 
     local = [p.name for p in out_dir.iterdir() if p.is_file() and p.suffix in (".conf", ".cfg")
              and re.search(re.escape(str(Path(config["racine"]))) + "|/Users/", p.read_text())]

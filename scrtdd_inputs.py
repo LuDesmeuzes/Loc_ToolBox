@@ -90,7 +90,7 @@ import pandas as pd
 import yaml
 
 from fetch_picks import days_between
-from nll_common import load_config, log, read_hyp
+from nll_common import LANGUES, load_config, log, output_language, read_hyp
 from profil_vers_seiscomp import locgrid_region
 from seiscomp_xml_to_obs import read_xml_files
 
@@ -311,6 +311,18 @@ def apply_overrides(model, sets):
     return changes
 
 
+def profile_header(reloc, run, debut, fin, modele, langue="fr"):
+    """Lignes de commentaire en tête de scrtdd_<reloc>.cfg."""
+    today = date.today().isoformat()
+    if langue == "en":
+        return [f"scrtdd profile of relocation {reloc} (run {run}, from {debut} to {fin}),",
+                f"written by scrtdd_inputs.py (Loc_ToolBox) on {today}, template {modele}.",
+                "Settings and counts: reloc.yaml. See LANCER.txt."]
+    return [f"Profil scrtdd de la relocalisation {reloc} (run {run}, du {debut} au {fin}),",
+            f"écrit par scrtdd_inputs.py (Loc_ToolBox) le {today}, modèle {modele}.",
+            "Réglages et comptes : reloc.yaml. Voir LANCER.txt."]
+
+
 def profile_cfg(name, params, table_model, region, header):
     """
     Lignes profile.<name>.* de scrtdd.cfg : la table NLLGrid du profil NLL
@@ -326,10 +338,98 @@ def profile_cfg(name, params, table_model, region, header):
 
 def lancer_text(reloc, run, debut, fin, modele, changes, counts, login, remote, out_dir,
                 archive, profil, n_profile_lines, cross_correlation,
-                recordstream=DEFAULT_RECORDSTREAM):
-    """LANCER.txt : commandes à copier, sans commentaires (zsh), dans l'ordre."""
+                recordstream=DEFAULT_RECORDSTREAM, langue="fr"):
+    """
+    LANCER.txt : commandes à copier, sans commentaires (zsh), dans l'ordre.
+    langue (fr, en) ne change que les explications : les commandes sont les mêmes.
+    """
     cmd = (f"seiscomp exec scrtdd --reloc-catalog station.csv,event.csv,phase.csv "
            f"--profile {reloc} --dump-diagnostics --verbosity=3 --console=1 -d \"$BASE\"")
+    if langue == "en":
+        mods = f", changed by --set: {'; '.join(changes)}" if changes else ""
+        if cross_correlation:
+            run_step = f"""4. Relocation (seiscomp exec loads the SeisComP environment, without
+   which the tttnll plugin cannot be found). The waveforms ({counts['fenetres']} windows)
+   are read from {recordstream} and kept in the scrtdd cache
+   (performance.cacheDirectory): a rerun is much faster.
+
+cd {remote}
+{cmd} -I "{recordstream}" 2>&1 | tee scrtdd.log
+"""
+            waveforms = f"""5. Missing waveforms: if the summary line of step 6 shows many
+   "not available" (a handful does not matter), gather the waveforms in a dedicated archive,
+   shared by the run's relocations (public data centres through EIDA
+   routing; see telecharger_formes_onde.py, --archive-serveur for networks
+   that no public centre serves), then rerun with it:
+
+cd {remote}
+python3 telecharger_formes_onde.py --archive {archive}
+{cmd} -I sdsarchive://{archive} 2>&1 | tee scrtdd.log
+"""
+        else:
+            run_step = f"""4. Relocation (seiscomp exec loads the SeisComP environment, without
+   which the tttnll plugin cannot be found):
+
+cd {remote}
+{cmd} 2>&1 | tee scrtdd.log
+"""
+            waveforms = """5. No cross-correlation (crossCorrelation.enable = false): no
+   waveforms needed.
+"""
+        title = f"scrtdd relocation {reloc}: run {run}, from {debut} to {fin}"
+        return f"""{title}
+{'=' * len(title)}
+Prepared by scrtdd_inputs.py on {date.today().isoformat()}: {counts['evenements']} events, {counts['phases']} phases,
+{counts['stations']} stations. Template {modele}{mods}.
+Effective settings: reloc.yaml. To change them, rerun scrtdd_inputs.py
+with --set … --force rather than editing the files on the server:
+reloc.yaml must record what was run.
+
+0. Prerequisite, once per NLL profile: profile {profil} installed with
+   profil_vers_seiscomp.py (step 5 of its INSTALLER.txt: tttnll plugin,
+   table {profil}, cache folder). On the SeisComP machine, the first line
+   must mention {profil}, the second a folder in your account:
+
+grep "^ttt.NLLGrid.tables" ~/.seiscomp/scrtdd.cfg
+grep "^performance.cacheDirectory" ~/.seiscomp/scrtdd.cfg
+
+1. Copy the relocation (from this machine):
+
+ssh {login} "mkdir -p {remote}"
+rsync -avz {out_dir}/ {login}:{remote}/
+
+2. On the SeisComP machine, add profile {reloc} to the scrtdd
+   configuration (only once; the count should be {n_profile_lines}):
+
+grep -q "^profile.{reloc}\\." ~/.seiscomp/scrtdd.cfg || cat {remote}/scrtdd_{reloc}.cfg >> ~/.seiscomp/scrtdd.cfg
+grep -c "^profile.{reloc}\\." ~/.seiscomp/scrtdd.cfg
+
+3. Database connection (station inventory: component orientation for
+   cross-correlation). The second command should print an address like
+   mysql://…@…/seiscomp:
+
+BASE=$(grep -h "^database *=" ~/.seiscomp/scolv-PROD.cfg ~/.seiscomp/global.cfg 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+echo "$BASE"
+
+{run_step}
+{waveforms}
+6. Checks: waveform summary ("downloaded … not available …", otherwise
+   step 5); the values from reloc.yaml should appear in the log; number of
+   relocated events (out of {counts['evenements']}; those without enough
+   neighbours to form pairs are not relocated):
+
+grep "Catalog waveform data" scrtdd.log
+grep -i -E "dampingFactor|absoluteLocationConstraint|minCCCoef|maxInterEventDistance" scrtdd.log | head -20
+grep -c ",true," reloc-event.csv
+
+7. Bring the outputs back into the relocation folder (from this machine):
+
+rsync -avz --exclude mseed/ {login}:{remote}/ {out_dir}/
+
+   To analyse it with LocQuality_ToolBox, add the relocation to
+   compare.scrtdd_runs in its config.yaml:
+   {reloc}: "{out_dir}"
+"""
     mods = f", modifié par --set : {'; '.join(changes)}" if changes else ""
     if cross_correlation:
         run_step = f"""4. Relocalisation (seiscomp exec charge l'environnement de SeisComP, sans
@@ -453,6 +553,9 @@ def parse_args():
                         help="Source des formes d'onde de scrtdd (-I), ex. fdsnws://hôte:port "
                              f"(défaut : fetch.recordstream de la config, sinon {DEFAULT_RECORDSTREAM})")
     parser.add_argument("--sortie", help="Dossier de sortie (défaut : <run>/scrtdd/<reloc>)")
+    parser.add_argument("--langue", choices=LANGUES,
+                        help="Langue de LANCER.txt et de l'en-tête du profil scrtdd "
+                             "(défaut : clé langue de la config, sinon fr)")
     parser.add_argument("--force", action="store_true",
                         help="Remplacer une relocalisation existante du même nom (sorties rapatriées comprises)")
     parser.add_argument(
@@ -473,6 +576,7 @@ def main():
     entrees, params = model["entrees"], model["profil"]
 
     config = load_config(args.config)
+    langue = output_language(config, args.langue)
     run_dir = Path(config["run"]["runs_dir"]) / args.run
     meta_path = run_dir / "run.yaml"
     if not meta_path.exists():
@@ -577,10 +681,7 @@ def main():
               "ecartes_phases": len(events) - len(ev_rows), "evenements": len(ev_rows), "phases": len(ph_rows), "stations": len(st_rows),
               "fenetres": len(windows)}
     region = locgrid_region(conf_path.read_text().splitlines())
-    header = [f"Profil scrtdd de la relocalisation {args.reloc} (run {args.run}, du {debut} au {fin}),",
-              f"écrit par scrtdd_inputs.py (Loc_ToolBox) le {date.today().isoformat()}, "
-              f"modèle {model_path.stem}.",
-              "Réglages et comptes : reloc.yaml. Voir LANCER.txt."]
+    header = profile_header(args.reloc, args.run, debut, fin, model_path.stem, langue)
     cfg = profile_cfg(args.reloc, params, profil, region, header)
     (out_dir / f"scrtdd_{args.reloc}.cfg").write_text(cfg)
     record = {"reloc": args.reloc, "run": args.run, "profil_nll": profil,
@@ -596,7 +697,7 @@ def main():
     (out_dir / "LANCER.txt").write_text(
         lancer_text(args.reloc, args.run, debut, fin, model_path.stem, changes, counts, login,
                     remote, out_dir, archive, profil, n_lines,
-                    bool(params.get("crossCorrelation.enable")), recordstream))
+                    bool(params.get("crossCorrelation.enable")), recordstream, langue))
     log(f"→ {out_dir} (commandes : LANCER.txt)", 1)
 
 

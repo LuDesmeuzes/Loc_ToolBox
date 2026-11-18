@@ -20,6 +20,11 @@
 # dans le PATH :
 # nll_bin: ~/NonLinLoc/src/bin
 
+# Langue des fichiers d'instructions générés (INSTALLER.txt, LANCER.txt et
+# commentaires des .cfg) : fr (défaut) ou en. Les commandes sont les mêmes ;
+# --langue de profil_vers_seiscomp.py et scrtdd_inputs.py la remplace.
+# langue: en
+
 paths:
   # Fichier du modèle de vitesse global (LON LAT DEPTH VP VS)
   model_file: "donnees/modele_vitesse/wet_new.asc"

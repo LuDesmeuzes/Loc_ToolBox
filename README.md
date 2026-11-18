@@ -117,6 +117,7 @@ puis modifier dans `config.yaml` :
 | `racine` | Dossier de travail (défaut : `Loc_ToolBox_travail/` à côté du dépôt) |
 | `nll_bin` | Dossier des programmes NonLinLoc, s'ils ne sont ni dans `<racine>/bin/` ni dans le PATH |
 | `paths.model_file` | Modèle 3D global (pour `--modele-3d` seulement) |
+| `langue` | Langue des fichiers d'instructions générés (`INSTALLER.txt`, `LANCER.txt`, commentaires des `.cfg`) : `fr` (défaut) ou `en`. Les commandes ne changent pas |
 
 Les autres chemins (`run.profils_dir`, `run.runs_dir`, `fetch.cache_dir`…)
 sont relatifs à `racine` et ont des valeurs par défaut : il n'y a pas à y
@@ -441,6 +442,7 @@ des XML journaliers des pointés ; sans elle, ce sont ceux de `config.yaml`.
 | `--utilisateur` | Identifiant sur la machine SeisComP | celui de l'ordinateur |
 | `--hote` | Machine SeisComP | `ist-oar.u-ga.fr` |
 | `--nllroot` | Dossier des profils sur la machine SeisComP | `/home/<utilisateur>/.seiscomp/nll` |
+| `--langue` | Langue d'`INSTALLER.txt` et des commentaires des `.cfg` : `fr` ou `en` | clé `langue` de la config, sinon `fr` |
 
 Seules les grilles des stations pointées dans les runs du profil sont
 copiées : lancer d'abord `nll_run.py --grilles` sur la période voulue. Le
@@ -520,6 +522,8 @@ Options, à ajouter si besoin (elles se combinent) :
   (ex. `--set solver.dampingFactor=0.05 --set entrees.rms_max=0.3`) ;
 - `--recordstream <source>` : lire les formes d'onde ailleurs que sur le
   serveur de la config (voir « Formes d'onde » ci-dessous) ;
+- `--langue en` : `LANCER.txt` et l'en-tête du profil scrtdd en anglais
+  (défaut : clé `langue` de la config, sinon `fr`) ;
 - `--force` : remplacer une relocalisation du même nom.
 
 Par exemple, une relocalisation sur décembre seulement, avec un amortissement plus
