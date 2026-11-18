@@ -175,6 +175,9 @@ reviewed on the server since). The results are in
 - `exemple_ubaye_1D_20240901_20240930.hyp`: the locations in NLLoc format;
 - `evenements.csv`: one event per line, with the server origin for
   comparison;
+- `localisations.csv`: one line per located event (`evid`, `time`,
+  `latitude`, `longitude`, `depth_km`, `erh_km`, `erz_km`, `rms_s`,
+  `n_phases`, `gap_deg`), to drop as is into the HTML map and sections tool;
 - `phases.csv`: the residuals of each phase;
 - `run.yaml`: profile, period, parameters and counts.
 
@@ -364,7 +367,7 @@ Options, to add as needed (they can be combined):
 4. `NLLoc` runs in parallel on `--jobs` chunks of the period (default:
    number of cores − 1): about 2 minutes for 3,000 events.
 5. The run is written to `<runs_dir>/<name>/` (default
-   `<profile>_<start>_<end>`): `<name>.hyp`, `evenements.csv`, `phases.csv`
+   `<profile>_<start>_<end>`): `<name>.hyp`, `localisations.csv`, `evenements.csv`, `phases.csv`
    and `run.yaml`. LocQuality_ToolBox reads this folder directly
    (`paths.nll_runs`).
 6. At the end of the run, `nll_run.py` prints the next two commands, ready
@@ -376,6 +379,16 @@ Picked stations without a travel time grid are reported: NLLoc ignores their
 phases. With `--grilles`, these are stations missing from the server
 inventory, or outside the tile in 3D (`--exclure-hors-modele <profile>`
 removes their phases, to compare profiles on the same data).
+
+For a run made before `nll_run.py` wrote `localisations.csv`, or for a
+`.hyp` from elsewhere, `hyp_vers_csv.py` writes that file without
+running NLLoc again:
+
+```bash
+python hyp_vers_csv.py <runs_dir>/05_ubaye_1D_topo_20230514_20250630
+python hyp_vers_csv.py <runs_dir>/*/          # every run
+python hyp_vers_csv.py other.hyp --sortie other_locations.csv
+```
 
 For a local run to reproduce SeisComP, `NLL.<profile>.conf` must match the
 profile configuration on the server: this is what
@@ -765,6 +778,7 @@ Loc_ToolBox/
 ├── choisir_zone.html          ← map: draw the area, get the creer_profil.py command
 ├── creer_profil.py            ← new 1D or 3D profile + region configuration
 ├── nll_run.py                 ← local NLL run: profile × period
+├── hyp_vers_csv.py            ← a run's .hyp → localisations.csv (without running NLLoc again)
 ├── fetch_picks.py             ← picks for a period from the server (fdsnws)
 ├── seiscomp_xml_to_obs.py     ← SeisComP picks (already downloaded XML) → NLLOC_OBS
 ├── profil_vers_seiscomp.py    ← local profile → folder to install in SeisComP (scolv, scrtdd)

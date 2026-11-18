@@ -29,6 +29,9 @@ Sorties (dans <run.runs_dir>/<nom>/) :
                          Event ID SeisComP), lues directement par LocQuality
   - evenements.csv     : événements de la période et origine de référence
   - run.yaml           : profil, période, paramètres de recherche, comptes
+  - localisations.csv  : une ligne par événement localisé (evid, time, latitude,
+                         longitude, depth_km, erh_km, erz_km, rms_s…), lisible
+                         tel quel par l'outil carte et coupes HTML
   - phases.csv         : une ligne par phase des événements localisés (station,
                          phase, résidu, poids, distance, azimut…)
   - nlloc_<k>.in, obs/, loc/ : fichiers de travail de NLLoc
@@ -49,6 +52,7 @@ Utilisation :
 """
 
 import argparse
+import csv
 import io
 import os
 import re
@@ -63,7 +67,7 @@ import pandas as pd
 import yaml
 
 from fetch_picks import fetch_period
-from nll_common import AzimuthalEquidistant, load_config, log, require_nll
+from nll_common import AzimuthalEquidistant, load_config, log, read_hyp, require_nll
 
 # Mots-clés gérés par nll_run.py, jamais recopiés depuis le .conf du profil
 MANAGED_KEYWORDS = {"CONTROL", "LOCFILES", "LOCHYPOUT"}
@@ -294,6 +298,31 @@ def merge_hyp(loc_dirs, out_path):
     return n_located, n_rejected
 
 
+# Colonnes de localisations.csv : noms reconnus par l'outil carte et coupes
+# HTML (outil_ubaye_vide.html) ; depth_km sous le niveau de la mer
+LOCATION_COLUMNS = ["evid", "time", "latitude", "longitude", "depth_km", "erh_km",
+                    "erz_km", "rms_s", "n_phases", "gap_deg"]
+
+
+def write_locations(hyp_path, out_csv):
+    """Écrit out_csv (une ligne par événement LOCATED du .hyp) ; renvoie le nombre de lignes."""
+    rows = [{"evid": e["event_id"], "time": e["time"].isoformat(),
+             "latitude": round(e["latitude"], 6), "longitude": round(e["longitude"], 6),
+             "depth_km": round(e["depth"], 4), "erh_km": _round(e.get("erh"), 4),
+             "erz_km": _round(e.get("erz"), 4), "rms_s": _round(e.get("rms"), 5),
+             "n_phases": e.get("n_phases"), "gap_deg": _round(e.get("gap"), 1)}
+            for e in read_hyp(hyp_path) if e.get("status") == "LOCATED"]
+    with open(out_csv, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=LOCATION_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
+
+
+def _round(value, digits):
+    return None if value is None else round(value, digits)
+
+
 # Colonnes de phases.csv : celles d'une ligne du bloc PHASE d'un .hyp NLLoc,
 # avant « > » (pointé) puis après (calcul NLLoc)
 PHASE_COLUMNS = ["event_id", "station", "phase", "time", "error_s", "tt_pred_s",
@@ -465,6 +494,8 @@ def main():
     elapsed = (datetime.now() - start).total_seconds()
     n_located, n_rejected = merge_hyp(loc_dirs, run_dir / f"{name}.hyp")
     log(f"{n_located} localisés, {n_rejected} rejetés en {elapsed:.0f} s", 1)
+    n_loc = write_locations(run_dir / f"{name}.hyp", run_dir / "localisations.csv")
+    log(f"{n_loc} localisations → localisations.csv", 1)
     n_phases = extract_phases(loc_dirs, run_dir / "phases.csv")
     log(f"{n_phases} phases (résidus) → phases.csv", 1)
 

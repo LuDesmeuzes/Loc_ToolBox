@@ -259,7 +259,9 @@ def read_hyp(path):
     Lit un fichier .hyp NLLoc (un ou plusieurs blocs NLLOC … END_NLLOC) et
     renvoie une liste de dicts : event_id (PUBLIC_ID, None si absent),
     status (LOCATED, REJECTED…), time (datetime, UTC naïf), latitude,
-    longitude, depth (km, positif vers le bas), rms (s).
+    longitude, depth (km, positif vers le bas), rms (s), n_phases, gap (°),
+    et erh / erz (km) quand le bloc STATISTICS est là : erh = max(√CovXX,
+    √CovYY), erz = √CovZZ, comme les incertitudes de SeisComP.
     """
     events, ev = [], None
     for line in Path(path).read_text().splitlines():
@@ -281,6 +283,12 @@ def read_hyp(path):
                                                             float(words[13]))
         elif key == "QUALITY":
             ev["rms"] = float(words[words.index("RMS") + 1])
+            ev["n_phases"] = int(words[words.index("Nphs") + 1]) if "Nphs" in words else None
+            ev["gap"] = float(words[words.index("Gap") + 1]) if "Gap" in words else None
+        elif key == "STATISTICS" and "CovXX" in words:
+            cov = {k: float(words[words.index(k) + 1]) for k in ("CovXX", "YY", "ZZ")}
+            ev["erh"] = max(cov["CovXX"], cov["YY"]) ** 0.5
+            ev["erz"] = cov["ZZ"] ** 0.5
         elif key == "END_NLLOC":
             events.append(ev)
             ev = None

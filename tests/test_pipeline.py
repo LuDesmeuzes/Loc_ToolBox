@@ -308,6 +308,7 @@ def test_read_hyp(tmp_path):
         "PUBLIC_ID ev1\n"
         "GEOGRAPHIC  OT 2023 05 14  06 25 16.700850  Lat 44.618439 Long 6.677626 Depth -2.581676\n"
         "QUALITY  Pmax 1.6e+10 MFmin 10.3 MFmax 12.5 RMS 0.00237999 Nphs 5 Gap 199.6 Dist 8.8\n"
+        "STATISTICS  ExpectX 1 Y 2 Z 3  CovXX 4 XY 0 XZ 0 YY 1 YZ 0 ZZ 9 EllAz1 0\n"
         "END_NLLOC\n\n"
         'NLLOC "loc.b" "REJECTED" "too few phases"\n'
         "GEOGRAPHIC  OT 2023 05 15  19 03 38.29  Lat 44.5 Long 6.8 Depth 2.2\n"
@@ -318,6 +319,35 @@ def test_read_hyp(tmp_path):
     assert events[0]["time"].isoformat() == "2023-05-14T06:25:16.700850"
     assert events[0]["depth"] == pytest.approx(-2.581676)
     assert events[0]["rms"] == pytest.approx(0.00237999)
+    assert events[0]["n_phases"] == 5 and events[0]["gap"] == pytest.approx(199.6)
+    assert events[0]["erh"] == pytest.approx(2.0) and events[0]["erz"] == pytest.approx(3.0)
+    assert "erh" not in events[1]
+
+
+def test_write_locations(tmp_path):
+    import csv
+
+    from nll_run import write_locations
+
+    hyp = tmp_path / "run.hyp"
+    hyp.write_text(
+        'NLLOC "loc.a" "LOCATED" "Location completed."\n'
+        "PUBLIC_ID ev1\n"
+        "GEOGRAPHIC  OT 2023 05 14  06 25 16.700850  Lat 44.618439 Long 6.677626 Depth -2.581676\n"
+        "QUALITY  Pmax 1.6e+10 MFmin 10.3 MFmax 12.5 RMS 0.00237999 Nphs 5 Gap 199.6 Dist 8.8\n"
+        "STATISTICS  ExpectX 1 Y 2 Z 3  CovXX 4 XY 0 XZ 0 YY 1 YZ 0 ZZ 9 EllAz1 0\n"
+        "END_NLLOC\n\n"
+        'NLLOC "loc.b" "REJECTED" "too few phases"\n'
+        "GEOGRAPHIC  OT 2023 05 15  19 03 38.29  Lat 44.5 Long 6.8 Depth 2.2\n"
+        "END_NLLOC\n"
+    )
+    out = tmp_path / "localisations.csv"
+    assert write_locations(hyp, out) == 1
+    rows = list(csv.DictReader(out.open()))
+    assert rows == [{"evid": "ev1", "time": "2023-05-14T06:25:16.700850",
+                     "latitude": "44.618439", "longitude": "6.677626", "depth_km": "-2.5817",
+                     "erh_km": "2.0", "erz_km": "3.0", "rms_s": "0.00238",
+                     "n_phases": "5", "gap_deg": "199.6"}]
 
 
 def test_scrtdd_build_tables():
@@ -743,3 +773,17 @@ def test_cfg_langues():
         assert settings(fr) == settings(en) and fr != en
     en = screloc_cfg("p1", "/home/u/nll", block, 0.02, "en")
     assert "for screloc" in en and "Copied to" in en and "pour" not in en
+
+
+def test_hyp_vers_csv_sorties(tmp_path):
+    from hyp_vers_csv import hyp_and_output
+
+    run = tmp_path / "r1"
+    run.mkdir()
+    (run / "r1.hyp").write_text("")
+    (tmp_path / "autre.hyp").write_text("")
+    assert hyp_and_output(run) == (run / "r1.hyp", run / "localisations.csv")
+    assert hyp_and_output(run / "r1.hyp") == (run / "r1.hyp", run / "localisations.csv")
+    assert hyp_and_output(tmp_path / "autre.hyp") == (tmp_path / "autre.hyp", tmp_path / "autre.csv")
+    with pytest.raises(SystemExit, match="dossier de run"):
+        hyp_and_output(tmp_path)
